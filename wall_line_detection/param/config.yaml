@@ -1,0 +1,13 @@
+wall_line_detection:
+  ros__parameters:
+    laserscan_topic_sub_name: "/scan"
+    laserscan_topic_pub_name: "/scan_converged"
+    map_topic_sub_name: "/map"
+    laserscan_queue_size: 7
+    map_frame: "map"
+    base_link_frame: "base_link"
+    laser_link_frame: "laser_link"
+    
+
+
+
