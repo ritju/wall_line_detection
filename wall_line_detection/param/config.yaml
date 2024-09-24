@@ -7,6 +7,18 @@ wall_line_detection:
     map_frame: "map"
     base_link_frame: "base_link"
     laser_link_frame: "laser_link"
+    canny_thr1: 100.0
+    canny_thr2: 200.0
+    hough_rho: 3.0
+    hough_theta: 0.052360 # pi / 180 * N
+    hough_thr: 20
+    hough_min_line_length: 30.0
+    hough_max_line_gap: 10.0
+    imshow_wait: 20000
+    vertical_thr: 6.0
+    horizontal_thr: 15
+    theta_thr: 0.087266 # pi / 180 * N
+
     
 
 
