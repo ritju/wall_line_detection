@@ -87,6 +87,11 @@ int imshow_wait;
 double vertical_thr;
 int horizontal_thr;
 double theta_thr;
+bool imshow_map;
+bool imshow_laser;
+bool imshow_edge;
+bool imshow_line;
+int window_type;
 
 // member functions
 typedef std::recursive_mutex mutex_t;
@@ -138,6 +143,11 @@ double area(int x1, int y1, int x2, int y2, int x3, int y3)
 double distance(int x1, int y1, int x2, int y2)
 {     
         return std::sqrt(std::pow(x1-x2, 2) + std::pow(y1-y2, 2));
+}
+
+double calculate_height(int x1, int y1, int x2, int y2, int x3, int y3)
+{
+        return area(x1, y1, x2, y2, x3, y3) / distance(x2, y2, x3, y3);
 }
 
 double calculate_vertical_distance_dummy(cv::Vec4i line1, cv::Vec4i line2)

@@ -14,10 +14,15 @@ wall_line_detection:
     hough_thr: 20
     hough_min_line_length: 30.0
     hough_max_line_gap: 10.0
-    imshow_wait: 20000
+    imshow_wait: 20
     vertical_thr: 6.0
     horizontal_thr: 15
     theta_thr: 0.087266 # pi / 180 * N
+    imshow_map: false
+    imshow_laser: false
+    imshow_edge: true
+    imshow_line: true
+    window_type: 1 # nomal=0, autosize=1
 
     
 

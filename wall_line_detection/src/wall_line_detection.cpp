@@ -65,6 +65,11 @@ void WallLineDetection::init_params()
         this->declare_parameter<double>("vertical_thr", 5.0);
         this->declare_parameter<int>("horizontal_thr", 5);
         this->declare_parameter<double>("theta_thr", 0.087266);
+        this->declare_parameter<bool>("imshow_map", false);
+        this->declare_parameter<bool>("imshow_laser", false);
+        this->declare_parameter<bool>("imshow_edge", false);
+        this->declare_parameter<bool>("imshow_line", false);
+        this->declare_parameter<int>("window_type", 0);
 
         this->laserscan_topic_sub_name = this->get_parameter_or<std::string>("laserscan_topic_sub_name", std::string("/scan"));
         this->laserscan_topic_pub_name = this->get_parameter_or<std::string>("laserscan_topic_pub_name", std::string("/scan_converged"));
@@ -84,6 +89,11 @@ void WallLineDetection::init_params()
         this->vertical_thr = this->get_parameter_or<double>("vertical_thr", 5.0);
         this->horizontal_thr = this->get_parameter_or<int>("horizontal_thr", 5.0);
         this->theta_thr = this->get_parameter_or<double>("theta_thr", 0.087266);
+        this->imshow_map = this->get_parameter_or<bool>("imshow_map", false);
+        this->imshow_laser = this->get_parameter_or<bool>("imshow_laser", false);
+        this->imshow_edge = this->get_parameter_or<bool>("imshow_edge", false);
+        this->imshow_line = this->get_parameter_or<bool>("imshow_line", false);
+        this->window_type = this->get_parameter_or<int>("window_type", 0);
 }
 
 void WallLineDetection::get_map_laser_link_tf()
@@ -233,7 +243,7 @@ void WallLineDetection::laserscan_sub_callback_(const LaserScanMsg::SharedPtr ms
                         line_info.theta = std::atan2(pt2.y - pt1.y, pt2.x - pt1.x);
 
                         pt0.x = 0, pt0.y = 0;
-                        line_info.rho = area(pt0.x, pt0.y, pt1.x, pt1.y, pt2.x, pt2.y) / distance(pt1.x, pt1.y, pt2.x, pt2.y);
+                        line_info.rho = calculate_height(pt0.x, pt0.y, pt1.x, pt1.y, pt2.x, pt2.y);
 
                         this->lines_.push_back(line_info);
                 }
@@ -250,14 +260,29 @@ void WallLineDetection::laserscan_sub_callback_(const LaserScanMsg::SharedPtr ms
                         cv::line(img_map_empty_clone2, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), this->colors[ i % (color_size + 1)], 1, cv::LINE_AA);
                 }
 
-                // cv::namedWindow("laser_scan", cv::WindowFlags::WINDOW_NORMAL);
-                // cv::imshow("laser_scan", img_map_empty_clone);
+                if (this->imshow_laser)
+                {
+                        cv::namedWindow("laser_scan", this->window_type);
+                        cv::imshow("laser_scan", img_map_empty_clone);
+                }
+                
+                if (this->imshow_edge)
+                {
+                        cv::namedWindow("edges", this->window_type);
+                        cv::imshow("edges", edges_img);
+                }
 
-                // cv::imshow("Edges", edges_img);
-                cv::namedWindow("Lines", cv::WindowFlags::WINDOW_NORMAL);
-                cv::imshow("Lines", img_map_empty_clone2);
+                if (this->imshow_line)
+                {
+                        cv::namedWindow("lines", this->window_type);
+                        cv::imshow("lines", img_map_empty_clone2);
+                }
 
-                cv::waitKey(this->imshow_wait);
+                if (this->imshow_laser || this->imshow_edge || this->imshow_line)
+                {
+                        cv::waitKey(this->imshow_wait);
+                }
+                
         }
 }
 
@@ -341,9 +366,14 @@ void WallLineDetection::map_sub_callback_(const OccupancyGridMsg::SharedPtr msg)
 
         this->img_map_ = cv::Mat(this->map_height_, this->map_width_, CV_8UC3, data_ptr);
         this->img_map_empty_ = cv::Mat(this->map_height_, this->map_width_, CV_8UC3, cv::Scalar(255, 255, 255));
-        // cv::namedWindow("map", cv::WindowFlags::WINDOW_NORMAL);
-        // cv::imshow("map", this->img_map_);
-        // cv::waitKey(10);
+        
+        if (this->imshow_map)
+        {
+                cv::namedWindow("map", this->window_type);
+                cv::imshow("map", this->img_map_);
+                cv::waitKey(10);
+        }
+        
 }
 
 MapPose WallLineDetection::word_to_picture_bounded(double w_x, double w_y)
@@ -388,67 +418,75 @@ void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
                                 RCLCPP_INFO(get_logger(), "break for theta threshold.");
                                 break;
                         }
-                        else if (this->calculate_vertical_distance_dummy(iter1->line, iter2->line) > this->vertical_thr)
-                        {
-                                RCLCPP_INFO(get_logger(), "break for vertical disntance threshold.");
-                                RCLCPP_INFO(get_logger(), "vertical_distance: %f, thre: %f", this->calculate_vertical_distance_dummy(iter1->line, iter2->line), this->vertical_thr);
-                                break;
-                        }
                         else
                         {
-                                cv::Point line1_pt1, line1_pt2, line2_pt1, line2_pt2;
-                                double theta1, theta2;
-                                double rho1, rho2;
-                                line1_pt1.x = iter1->line[0];
-                                line1_pt1.y = iter1->line[1];
-                                line1_pt2.x = iter1->line[2];
-                                line1_pt2.y = iter1->line[3];
-                                theta1 = iter1->theta;
-                                rho1 = iter1->rho;
-
-                                line2_pt1.x = iter2->line[0];
-                                line2_pt1.y = iter2->line[1];
-                                line2_pt2.x = iter2->line[2];
-                                line2_pt2.y = iter2->line[3];
-                                theta2 = iter2->theta;
-                                rho2 = iter2->rho;
-
-                                cv::Point line1_pt1_copy, line1_pt2_copy;
-                                cv::Point line2_pt1_copy, line2_pt2_copy;
-                                line1_pt1_copy = line1_pt1;
-                                line1_pt2_copy = line1_pt2;
-                                line2_pt1_copy = line2_pt1;
-                                line2_pt2_copy = line2_pt2;
-
-                                bool merge_occurred = this->merge_lines(line1_pt1, line1_pt2, line2_pt1, line2_pt2, (theta1 + theta2) / 2.0);
-
-                                if(merge_occurred)
+                                double vertical_distance = std::min(
+                                        std::min(this->calculate_height(iter1->line[0], iter1->line[1], iter2->line[0], iter2->line[1], iter2->line[2], iter2->line[3]), 
+                                                this->calculate_height(iter1->line[2], iter1->line[3], iter2->line[0], iter2->line[1], iter2->line[2], iter2->line[3])),
+                                        this->calculate_height((iter1->line[0] + iter1->line[2]) / 2, 
+                                        (iter1->line[1] + iter1->line[3]) / 2, iter2->line[0], iter2->line[1], iter2->line[2], iter2->line[3]));
+                                if (vertical_distance > this->vertical_thr)
                                 {
-                                        (*iter1).line[0] = line1_pt1.x;
-                                        (*iter1).line[1] = line1_pt1.y;
-                                        (*iter1).line[2] = line1_pt2.x;
-                                        (*iter1).line[3] = line1_pt2.y;
-                                        RCLCPP_INFO(get_logger(), "[(%d, %d), (%d, %d)]", line1_pt1.x, line1_pt1.y, line1_pt2.x, line1_pt2.y);
-                                        RCLCPP_INFO(get_logger(), "merge line [(%d, %d), (%d, %d)] and line [(%d, %d), (%d, %d)] to line [(%d, %d), (%d, %d)].",
-                                                line1_pt1_copy.x, line1_pt1_copy.y, line1_pt2_copy.x, line1_pt2_copy.y,
-                                                line2_pt1_copy.x, line2_pt1_copy.y, line2_pt2_copy.x, line2_pt2_copy.y,
-                                                iter1->line[0], iter1->line[1], iter1->line[2], iter1->line[3]);
-                                        RCLCPP_INFO(get_logger(), "line1 => rho: %f, theta: %f", rho1, theta1);
-                                        RCLCPP_INFO(get_logger(), "line2 => rho: %f, theta: %f", rho2, theta2);
-                                        iter2 = lines_infos.erase(iter2);
-                                        if (iter2 == lines_infos.end())
-                                        {
-                                                break;
-                                        }
+                                RCLCPP_INFO(get_logger(), "break for vertical disntance threshold.");
+                                RCLCPP_INFO(get_logger(), "vertical_distance: %f, thre: %f", vertical_distance, this->vertical_thr);
+                                break;
                                 }
                                 else
                                 {
-                                        RCLCPP_INFO(get_logger(), "line [(%d, %d), (%d, %d)] and line [(%d, %d), (%d, %d)] are different lines.",
-                                                line1_pt1_copy.x, line1_pt1_copy.y, line1_pt2_copy.x, line1_pt2_copy.y,
-                                                line2_pt1_copy.x, line2_pt1_copy.y, line2_pt2_copy.x, line2_pt2_copy.y);
-                                        iter2++;
+                                        cv::Point line1_pt1, line1_pt2, line2_pt1, line2_pt2;
+                                        double theta1, theta2;
+                                        double rho1, rho2;
+                                        line1_pt1.x = iter1->line[0];
+                                        line1_pt1.y = iter1->line[1];
+                                        line1_pt2.x = iter1->line[2];
+                                        line1_pt2.y = iter1->line[3];
+                                        theta1 = iter1->theta;
+                                        rho1 = iter1->rho;
+
+                                        line2_pt1.x = iter2->line[0];
+                                        line2_pt1.y = iter2->line[1];
+                                        line2_pt2.x = iter2->line[2];
+                                        line2_pt2.y = iter2->line[3];
+                                        theta2 = iter2->theta;
+                                        rho2 = iter2->rho;
+
+                                        cv::Point line1_pt1_copy, line1_pt2_copy;
+                                        cv::Point line2_pt1_copy, line2_pt2_copy;
+                                        line1_pt1_copy = line1_pt1;
+                                        line1_pt2_copy = line1_pt2;
+                                        line2_pt1_copy = line2_pt1;
+                                        line2_pt2_copy = line2_pt2;
+
+                                        bool merge_occurred = this->merge_lines(line1_pt1, line1_pt2, line2_pt1, line2_pt2, (theta1 + theta2) / 2.0);
+
+                                        if(merge_occurred)
+                                        {
+                                                (*iter1).line[0] = line1_pt1.x;
+                                                (*iter1).line[1] = line1_pt1.y;
+                                                (*iter1).line[2] = line1_pt2.x;
+                                                (*iter1).line[3] = line1_pt2.y;
+                                                RCLCPP_INFO(get_logger(), "[(%d, %d), (%d, %d)]", line1_pt1.x, line1_pt1.y, line1_pt2.x, line1_pt2.y);
+                                                RCLCPP_INFO(get_logger(), "merge line [(%d, %d), (%d, %d)] and line [(%d, %d), (%d, %d)] to line [(%d, %d), (%d, %d)].",
+                                                        line1_pt1_copy.x, line1_pt1_copy.y, line1_pt2_copy.x, line1_pt2_copy.y,
+                                                        line2_pt1_copy.x, line2_pt1_copy.y, line2_pt2_copy.x, line2_pt2_copy.y,
+                                                        iter1->line[0], iter1->line[1], iter1->line[2], iter1->line[3]);
+                                                RCLCPP_INFO(get_logger(), "line1 => rho: %f, theta: %f", rho1, theta1);
+                                                RCLCPP_INFO(get_logger(), "line2 => rho: %f, theta: %f", rho2, theta2);
+                                                iter2 = lines_infos.erase(iter2);
+                                                if (iter2 == lines_infos.end())
+                                                {
+                                                        break;
+                                                }
+                                        }
+                                        else
+                                        {
+                                                RCLCPP_INFO(get_logger(), "line [(%d, %d), (%d, %d)] and line [(%d, %d), (%d, %d)] are different lines.",
+                                                        line1_pt1_copy.x, line1_pt1_copy.y, line1_pt2_copy.x, line1_pt2_copy.y,
+                                                        line2_pt1_copy.x, line2_pt1_copy.y, line2_pt2_copy.x, line2_pt2_copy.y);
+                                                iter2++;
+                                        }
                                 }
-                        }
+                        }                        
                 }
         }
         size = lines_infos.size();
