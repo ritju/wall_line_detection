@@ -3,7 +3,7 @@ wall_line_detection:
     laserscan_topic_sub_name: "/scan"
     laserscan_topic_pub_name: "/scan_converged"
     map_topic_sub_name: "/map"
-    laserscan_queue_size: 7
+    laserscan_queue_size: 2
     map_frame: "map"
     base_link_frame: "base_link"
     laser_link_frame: "laser_link"
@@ -12,16 +12,16 @@ wall_line_detection:
     hough_rho: 3.0
     hough_theta: 0.052360 # pi / 180 * N
     hough_thr: 20
-    hough_min_line_length: 30.0
+    hough_min_line_length: 40.0
     hough_max_line_gap: 10.0
     imshow_wait: 20
     vertical_thr: 6.0
-    horizontal_thr: 15
+    horizontal_thr: 35
     theta_thr: 0.087266 # pi / 180 * N
-    imshow_map: true
-    imshow_laser: true
-    imshow_edge: true
-    imshow_line: true
+    imshow_map: false
+    imshow_laser: false
+    imshow_edge: false
+    imshow_line: false
     window_type: 1 # nomal=0, autosize=1
 
     

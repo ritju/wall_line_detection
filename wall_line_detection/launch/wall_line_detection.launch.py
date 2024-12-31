@@ -13,7 +13,7 @@ def generate_launch_description():
     
     # create launch configuration variables
     params_file_path = LaunchConfiguration('wall_line_params_files', default=os.path.join(wall_line_pkg, 'param', 'config.yaml'))
-    motion_control_log_level = LaunchConfiguration('wall_line_log_level', default="info")
+    wall_line_log_level = LaunchConfiguration('wall_line_log_level', default="info")
     
     # manual dock node
     wall_line_node = Node(
@@ -23,7 +23,7 @@ def generate_launch_description():
         namespace='',
         output='screen',
         parameters=[params_file_path],
-        
+        arguments=['--ros-args', '--log-level', ['wall_line_detection:=', wall_line_log_level]],        
     )
    
     launch_description.add_action(wall_line_node)

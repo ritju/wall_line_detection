@@ -181,7 +181,7 @@ void WallLineDetection::laserscan_sub_callback_(const LaserScanMsg::SharedPtr ms
                 double yaw_delta = this->laserscan_output_.angle_increment;
                 for (int i = 0; i < (int) this->laserscan_output_.ranges.size(); i++, yaw += yaw_delta)
                 {
-                        // RCLCPP_INFO(this->get_logger(), "yaw: %f", yaw);
+                        // RCLCPP_DEBUG(this->get_logger(), "yaw: %f", yaw);
                         double range = laserscan_output_.ranges[i];
                         if(std::isinf(range) || range < laserscan_output_.range_min || range > laserscan_output_.range_max)
                         {
@@ -200,14 +200,14 @@ void WallLineDetection::laserscan_sub_callback_(const LaserScanMsg::SharedPtr ms
                                 w_y = tf_map_point.getOrigin().getY();
                                 MapPose map_pose = this->word_to_picture_bounded(w_x, w_y);
                                 this->laserscan_points_vector.push_back(map_pose);
-                                // RCLCPP_INFO(this->get_logger(), "range: %f, yaw: %f", range, yaw);
-                                // RCLCPP_INFO(this->get_logger(), "w_x: %f, w_y: %f", w_x, w_y);
-                                // RCLCPP_INFO(this->get_logger(), "x: %d, y: %d", map_pose.x, map_pose.y);
+                                // RCLCPP_DEBUG(this->get_logger(), "range: %f, yaw: %f", range, yaw);
+                                // RCLCPP_DEBUG(this->get_logger(), "w_x: %f, w_y: %f", w_x, w_y);
+                                // RCLCPP_DEBUG(this->get_logger(), "x: %d, y: %d", map_pose.x, map_pose.y);
                         }
                 }
 
                 auto img_map_empty_clone = this->img_map_empty_.clone();
-                // RCLCPP_INFO(this->get_logger(), "size: %zu", this->laserscan_points_vector.size());
+                // RCLCPP_DEBUG(this->get_logger(), "size: %zu", this->laserscan_points_vector.size());
                 for(int i = 0; i< (int)this->laserscan_points_vector.size(); i++)
                 {
                         MapPose map_pose = this->laserscan_points_vector[i];                        
@@ -434,11 +434,11 @@ WorldPose WallLineDetection::map_to_world(int x, int y)
 void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
 {
         size_t size = lines_infos.size();
-        RCLCPP_INFO(get_logger(), "\nbefore filter, size: %zu", size);
+        RCLCPP_DEBUG(get_logger(), "\nbefore filter, size: %zu", size);
         int index = 0;
         for (auto iter = lines_infos.begin(); iter != lines_infos.end(); iter++)
         {
-                RCLCPP_INFO(get_logger(), "line%d: [(%d, %d), (%d, %d)]", index,
+                RCLCPP_DEBUG(get_logger(), "line%d: [(%d, %d), (%d, %d)]", index,
                         iter->line[0], iter->line[1], iter->line[2], iter->line[3]);
                 index++;
         }
@@ -446,17 +446,17 @@ void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
         index = 0;
         for (auto iter1 = lines_infos.begin(); (iter1 != lines_infos.end() - 1) && (iter1 != lines_infos.end()); iter1++)
         {               
-               RCLCPP_INFO(get_logger(), "----------- %d -----------", index);
-               RCLCPP_INFO(get_logger(), "line%d: [(%d, %d), (%d, %d)]", index++,
+               RCLCPP_DEBUG(get_logger(), "----------- %d -----------", index);
+               RCLCPP_DEBUG(get_logger(), "line%d: [(%d, %d), (%d, %d)]", index++,
                         iter1->line[0], iter1->line[1], iter1->line[2], iter1->line[3]);
                int index2 = 0;
                for (auto iter2 = iter1 + 1; iter2 != lines_infos.end();)
                {
-                        RCLCPP_INFO(get_logger(), "line%d: [(%d, %d), (%d, %d)]", (index + index2++),
+                        RCLCPP_DEBUG(get_logger(), "line%d: [(%d, %d), (%d, %d)]", (index + index2++),
                                 iter2->line[0], iter2->line[1], iter2->line[2], iter2->line[3]);
                         if (std::abs(iter1->theta - iter2->theta) > this->theta_thr)
                         {
-                                RCLCPP_INFO(get_logger(), "break for theta threshold.");
+                                RCLCPP_DEBUG(get_logger(), "break for theta threshold.");
                                 break;
                         }
                         else
@@ -468,8 +468,8 @@ void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
                                         (iter1->line[1] + iter1->line[3]) / 2, iter2->line[0], iter2->line[1], iter2->line[2], iter2->line[3]));
                                 if (vertical_distance > this->vertical_thr)
                                 {
-                                RCLCPP_INFO(get_logger(), "break for vertical disntance threshold.");
-                                RCLCPP_INFO(get_logger(), "vertical_distance: %f, thre: %f", vertical_distance, this->vertical_thr);
+                                RCLCPP_DEBUG(get_logger(), "break for vertical disntance threshold.");
+                                RCLCPP_DEBUG(get_logger(), "vertical_distance: %f, thre: %f", vertical_distance, this->vertical_thr);
                                 break;
                                 }
                                 else
@@ -506,13 +506,13 @@ void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
                                                 (*iter1).line[1] = line1_pt1.y;
                                                 (*iter1).line[2] = line1_pt2.x;
                                                 (*iter1).line[3] = line1_pt2.y;
-                                                RCLCPP_INFO(get_logger(), "[(%d, %d), (%d, %d)]", line1_pt1.x, line1_pt1.y, line1_pt2.x, line1_pt2.y);
-                                                RCLCPP_INFO(get_logger(), "merge line [(%d, %d), (%d, %d)] and line [(%d, %d), (%d, %d)] to line [(%d, %d), (%d, %d)].",
+                                                RCLCPP_DEBUG(get_logger(), "[(%d, %d), (%d, %d)]", line1_pt1.x, line1_pt1.y, line1_pt2.x, line1_pt2.y);
+                                                RCLCPP_DEBUG(get_logger(), "merge line [(%d, %d), (%d, %d)] and line [(%d, %d), (%d, %d)] to line [(%d, %d), (%d, %d)].",
                                                         line1_pt1_copy.x, line1_pt1_copy.y, line1_pt2_copy.x, line1_pt2_copy.y,
                                                         line2_pt1_copy.x, line2_pt1_copy.y, line2_pt2_copy.x, line2_pt2_copy.y,
                                                         iter1->line[0], iter1->line[1], iter1->line[2], iter1->line[3]);
-                                                RCLCPP_INFO(get_logger(), "line1 => rho: %f, theta: %f", rho1, theta1);
-                                                RCLCPP_INFO(get_logger(), "line2 => rho: %f, theta: %f", rho2, theta2);
+                                                RCLCPP_DEBUG(get_logger(), "line1 => rho: %f, theta: %f", rho1, theta1);
+                                                RCLCPP_DEBUG(get_logger(), "line2 => rho: %f, theta: %f", rho2, theta2);
                                                 iter2 = lines_infos.erase(iter2);
                                                 if (iter2 == lines_infos.end())
                                                 {
@@ -521,7 +521,7 @@ void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
                                         }
                                         else
                                         {
-                                                RCLCPP_INFO(get_logger(), "line [(%d, %d), (%d, %d)] and line [(%d, %d), (%d, %d)] are different lines.",
+                                                RCLCPP_DEBUG(get_logger(), "line [(%d, %d), (%d, %d)] and line [(%d, %d), (%d, %d)] are different lines.",
                                                         line1_pt1_copy.x, line1_pt1_copy.y, line1_pt2_copy.x, line1_pt2_copy.y,
                                                         line2_pt1_copy.x, line2_pt1_copy.y, line2_pt2_copy.x, line2_pt2_copy.y);
                                                 iter2++;
@@ -531,11 +531,11 @@ void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
                 }
         }
         size = lines_infos.size();
-        RCLCPP_INFO(get_logger(), "after filter, size: %zu", size);
+        RCLCPP_DEBUG(get_logger(), "after filter, size: %zu", size);
         index = 0;
         for (auto iter = lines_infos.begin(); iter != lines_infos.end(); iter++)
         {
-                RCLCPP_INFO(get_logger(), "line%d: [(%d, %d), (%d, %d)]", index,
+                RCLCPP_DEBUG(get_logger(), "line%d: [(%d, %d), (%d, %d)]", index,
                         iter->line[0], iter->line[1], iter->line[2], iter->line[3]);
                 index++;
         }
