@@ -37,6 +37,11 @@ WallLineDetection::WallLineDetection(const rclcpp::NodeOptions & options):
         auto pub_options1 = rclcpp::PublisherOptions();
         pub_options1.callback_group = pub_group1;
         this->laserscan_pub_ = this->create_publisher<LaserScanMsg>("/scan_converged", rclcpp::SensorDataQoS(), pub_options1);
+
+        auto pub_group2 = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+        auto pub_options2 = rclcpp::PublisherOptions();
+        pub_options2.callback_group = pub_group2;
+        this->wall_lines_pub_ = this->create_publisher<wall_line_detection_msgs::msg::WallLinesStamped>("/wall_lines_stamped", rclcpp::SensorDataQoS(), pub_options2);
 }
 
 WallLineDetection::~WallLineDetection()
@@ -158,7 +163,7 @@ void WallLineDetection::laserscan_sub_callback_(const LaserScanMsg::SharedPtr ms
 {
         this->laserscan_input_current_ = *msg;
 
-        std::lock_guard<mutex_t> (*this->getMutex());
+        std::lock_guard<mutex_t> guard(*this->getMutex());
         size_t queue_size = this->laserscan_queue_.size();
         if ((int)queue_size >= this->laserscan_queue_size_)
         {
@@ -251,6 +256,25 @@ void WallLineDetection::laserscan_sub_callback_(const LaserScanMsg::SharedPtr ms
                 std::sort(lines_.begin(), lines_.end(), [](LineInfo li1, LineInfo li2){return li1.theta < li2.theta;});
 
                 this->lines_filter(this->lines_);
+                wall_line_detection_msgs::msg::WallLinesStamped wall_lines_msg;
+                wall_lines_msg.header.frame_id = "map";
+                wall_lines_msg.header.stamp = now();
+                if (lines_.size() > 0)
+                {
+                        for (size_t index = 0; index < lines_.size(); index++)
+                        {
+                                wall_line_detection_msgs::msg::WallLine wall_line;
+                                auto line = lines_[index];
+                                WorldPose world_pose1 = map_to_world(line.line[0], line.line[1]);
+                                WorldPose world_pose2 = map_to_world(line.line[2], line.line[3]);
+                                wall_line.x1 = world_pose1.x;
+                                wall_line.y1 = world_pose1.y;
+                                wall_line.x2 = world_pose2.x;
+                                wall_line.y2 = world_pose2.y;
+                                wall_lines_msg.wall_lines.push_back(wall_line);
+                        }
+                }
+                wall_lines_pub_->publish(wall_lines_msg);
                 
                 size_t color_size = this->colors.size();
                 cv::Mat img_map_empty_clone2 = this->img_map_empty_.clone();
@@ -293,20 +317,26 @@ sensor_msgs::msg::LaserScan WallLineDetection::process_laserscan_queue(std::queu
         RCLCPP_ERROR(this->get_logger(), "Error occurs, queue is empty.");        
       }
 
-      LaserScanMsg output_msg = queue.back();
+      auto queue_copy = queue; // 在备份中操作queue
+
+      LaserScanMsg output_msg = queue_copy.front();
       size_t laserscan_size = output_msg.ranges.size() ;
-      
-      for (size_t i = 0; i < queue.size() - 1; i++)
+      queue_copy.pop();
+
+      while(!queue_copy.empty())
       {
-              LaserScanMsg tmp_msg = queue.front();
-              for (size_t j = 0; j < laserscan_size; j++)
-              {
+        LaserScanMsg tmp_msg = queue_copy.front();
+        queue_copy.pop();
+
+        for (size_t j = 0; j < laserscan_size; j++)
+        {
                 if (output_msg.ranges[j] > tmp_msg.ranges[j])
                 {
                         output_msg.ranges[j] = tmp_msg.ranges[j];
                 }                
-              }
+        }
       }
+
       return output_msg;
 }
 
@@ -388,6 +418,17 @@ MapPose WallLineDetection::word_to_picture_bounded(double w_x, double w_y)
         map_pose.y = this->map_height_ - 1 - map_pose.y;
 
         return map_pose;
+}
+
+WorldPose WallLineDetection::map_to_world(int x, int y)
+{
+        WorldPose world_pose;
+        int map_x, map_y;
+        map_x = x;
+        map_y = this->map_height_ - 1 - y;
+        world_pose.x = this->map_resolution_ * map_x + this->map_origin_.position.x;
+        world_pose.y = this->map_resolution_ * map_y + this->map_origin_.position.y;
+        return world_pose;
 }
 
 void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)

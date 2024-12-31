@@ -12,6 +12,7 @@
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "wall_line_detection_msgs/msg/wall_lines_stamped.hpp"
 
 #include <opencv2/opencv.hpp>
 
@@ -29,6 +30,12 @@ struct MapPose
 {
         int x;
         int y;
+};
+
+struct WorldPose
+{
+        double x;
+        double y;
 };
 
 struct LineInfo
@@ -63,6 +70,7 @@ rclcpp::Subscription<OccupancyGridMsg>::SharedPtr map_sub_;
 
 // pubs
 rclcpp::Publisher<LaserScanMsg>::SharedPtr laserscan_pub_;
+rclcpp::Publisher<wall_line_detection_msgs::msg::WallLinesStamped>::SharedPtr wall_lines_pub_;
 
 // callback
 void laserscan_sub_callback_(const LaserScanMsg::SharedPtr msg);
@@ -134,6 +142,9 @@ void get_map_robot_tf();
  * @return 图片坐标系下坐标
 */
 MapPose word_to_picture_bounded(double w_x, double w_y);
+
+WorldPose map_to_world(int x, int y);
+
 
 double area(int x1, int y1, int x2, int y2, int x3, int y3)
 {

@@ -18,8 +18,8 @@ wall_line_detection:
     vertical_thr: 6.0
     horizontal_thr: 15
     theta_thr: 0.087266 # pi / 180 * N
-    imshow_map: false
-    imshow_laser: false
+    imshow_map: true
+    imshow_laser: true
     imshow_edge: true
     imshow_line: true
     window_type: 1 # nomal=0, autosize=1

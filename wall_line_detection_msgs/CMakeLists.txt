@@ -7,9 +7,18 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(std_msgs REQUIRED)
+
+#添加消息文件和依赖
+rosidl_generate_interfaces(${PROJECT_NAME}
+  #---msg---
+  "msg/WallLine.msg"
+  "msg/WallLinesStamped.msg"
+  
+  DEPENDENCIES geometry_msgs
+ )
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

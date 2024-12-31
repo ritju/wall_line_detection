@@ -21,6 +21,7 @@ find_package(builtin_interfaces REQUIRED)
 find_package(capella_ros_msg REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(wall_line_detection_msgs REQUIRED)
 
 nav2_package()
 
@@ -43,6 +44,7 @@ set(dependencies
   capella_ros_msg
   rclcpp_components
   OpenCV
+  wall_line_detection_msgs
 )
 target_include_directories(wall_line_detection_lib PUBLIC include)
 
