@@ -1,6 +1,6 @@
 #include "wall_line_detection/wall_line_detection.hpp"
 
-using std::placeholders::_1, std::placeholders::_2;
+using std::placeholders::_1, std::placeholders::_2, std::placeholders::_3;
 
 namespace wall_line_detection_pkg
 {
@@ -17,15 +17,31 @@ WallLineDetection::WallLineDetection(const rclcpp::NodeOptions & options):
         this->tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         this->tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*this->tf_buffer_);
 
-        this->get_map_laser_link_tf();
-
         // subs
         auto sub_group1 = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
         auto sub_options1 = rclcpp::SubscriptionOptions();
         sub_options1.callback_group = sub_group1;
-        this->laserscan_sub_ = this->create_subscription<LaserScanMsg>
-                (this->laserscan_topic_sub_name, 30, std::bind(&WallLineDetection::laserscan_sub_callback_, this, _1), sub_options1);
         
+        if (this->laserscan_topic_sub_name.size() == 1) // 兼容只有一个激光数据的机器人
+        {
+                this->laserscan_sub_ = this->create_subscription<LaserScanMsg>
+                        (this->laserscan_topic_sub_name[0], 30, std::bind(&WallLineDetection::laserscan_sub_callback_, this, _1), sub_options1);
+        }
+        else if (this->laserscan_topic_sub_name.size() == 3) // 兼容有三个激光数据的机器人
+        {
+                auto cb_group_type = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+                auto sub_ops = rclcpp::SubscriptionOptions();
+                sub_ops.callback_group = cb_group_type;
+
+                laser_front_sub_.subscribe(this, laserscan_topic_sub_name[0], rclcpp::SensorDataQoS().get_rmw_qos_profile(), sub_ops);
+                laser_left_sub_.subscribe(this, laserscan_topic_sub_name[1], rclcpp::SensorDataQoS().get_rmw_qos_profile(), sub_ops);
+                laser_right_sub_.subscribe(this, laserscan_topic_sub_name[2], rclcpp::SensorDataQoS().get_rmw_qos_profile(), sub_ops);
+
+                sync_ = std::make_shared<Synchronizer>(SyncPolicy(10), laser_front_sub_, laser_left_sub_, laser_right_sub_);
+                sync_->registerCallback(std::bind(&WallLineDetection::all_lasers_callback, this, std::placeholders::_1,
+                        std::placeholders::_2, std::placeholders::_3));
+        }
+                
         auto sub_group2 = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
         auto sub_options2 = rclcpp::SubscriptionOptions();
         sub_options2.callback_group = sub_group2;
@@ -33,11 +49,6 @@ WallLineDetection::WallLineDetection(const rclcpp::NodeOptions & options):
                 (this->map_topic_sub_name, rclcpp::QoS(1).reliable().transient_local(), std::bind(&WallLineDetection::map_sub_callback_, this, _1), sub_options1);
 
         // pubs
-        auto pub_group1 = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-        auto pub_options1 = rclcpp::PublisherOptions();
-        pub_options1.callback_group = pub_group1;
-        this->laserscan_pub_ = this->create_publisher<LaserScanMsg>("/scan_converged", rclcpp::SensorDataQoS(), pub_options1);
-
         auto pub_group2 = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
         auto pub_options2 = rclcpp::PublisherOptions();
         pub_options2.callback_group = pub_group2;
@@ -52,12 +63,10 @@ WallLineDetection::~WallLineDetection()
 
 void WallLineDetection::init_params()
 {
-        this->declare_parameter<std::string>("laserscan_topic_sub_name", std::string("/scan"));
-        this->declare_parameter<std::string>("laserscan_topic_pub_name", std::string("/scan_converged"));
+        this->declare_parameter<std::vector<std::string>>("laserscan_topic_sub_name", std::vector<std::string>());
         this->declare_parameter<std::string>("map_topic_sub_name", std::string("/map"));
         this->declare_parameter<int>("laserscan_queue_size", 5);
         this->declare_parameter<std::string>("base_link_frame", "base_link");
-        this->declare_parameter<std::string>("laser_link_frame", "laser_link");
         this->declare_parameter<std::string>("map_frame", "map");
         this->declare_parameter<double>("canny_thr1", 100.0);
         this->declare_parameter<double>("canny_thr2", 200.0);
@@ -75,13 +84,12 @@ void WallLineDetection::init_params()
         this->declare_parameter<bool>("imshow_edge", false);
         this->declare_parameter<bool>("imshow_line", false);
         this->declare_parameter<int>("window_type", 0);
+        this->declare_parameter<float>("line_distance_max", 3.0);
 
-        this->laserscan_topic_sub_name = this->get_parameter_or<std::string>("laserscan_topic_sub_name", std::string("/scan"));
-        this->laserscan_topic_pub_name = this->get_parameter_or<std::string>("laserscan_topic_pub_name", std::string("/scan_converged"));
+        this->laserscan_topic_sub_name = this->get_parameter_or<std::vector<std::string>>("laserscan_topic_sub_name", std::vector<std::string>());
         this->map_topic_sub_name = this->get_parameter_or<std::string>("map_topic_sub_name", std::string("/map"));
         this->laserscan_queue_size_  = this->get_parameter_or<int>("laserscan_queue_size", 5);
         this->base_link_frame = this->get_parameter_or<std::string>("base_link_frame", "base_link");
-        this->laser_link_frame = this->get_parameter_or<std::string>("laser_link_frame", "laser_link");
         this->map_frame = this->get_parameter_or<std::string>("map_frame", "map");
         this->canny_thr1 = this->get_parameter_or<double>("canny_trh1", 100.0);
         this->canny_thr2 = this->get_parameter_or<double>("canny_trh2", 200.0);
@@ -99,13 +107,14 @@ void WallLineDetection::init_params()
         this->imshow_edge = this->get_parameter_or<bool>("imshow_edge", false);
         this->imshow_line = this->get_parameter_or<bool>("imshow_line", false);
         this->window_type = this->get_parameter_or<int>("window_type", 0);
+        this->line_distance_max = this->get_parameter_or<float>("line_distance_max", 3.0);
 }
 
-void WallLineDetection::get_map_laser_link_tf()
+void WallLineDetection::get_map_laser_link_tf(std::string laser_frame)
 {
         std::string errMsg;
         std::string refFrame = this->map_frame;
-        std::string childFrame = this->laser_link_frame;
+        std::string childFrame = laser_frame;
         geometry_msgs::msg::TransformStamped transformStamped;
 
         if (!this->tf_buffer_->canTransform(refFrame, childFrame, tf2::TimePointZero,
@@ -159,6 +168,198 @@ void WallLineDetection::get_map_robot_tf()
         }
 }
 
+void WallLineDetection::process_()
+{
+        auto img_map_empty_clone = this->img_map_empty_.clone();
+        // RCLCPP_DEBUG(this->get_logger(), "size: %zu", this->laserscan_points_vector.size());
+        for(int i = 0; i< (int)this->laserscan_points_vector.size(); i++)
+        {
+                MapPose map_pose = this->laserscan_points_vector[i];                        
+                img_map_empty_clone.at<cv::Vec3b>(map_pose.y, map_pose.x)[0] = 0;
+                img_map_empty_clone.at<cv::Vec3b>(map_pose.y, map_pose.x)[1] = 0;
+                img_map_empty_clone.at<cv::Vec3b>(map_pose.y, map_pose.x)[2] = 255;
+        }
+
+        cv::Mat img_map_clone2 = img_map_empty_clone.clone();
+        cv::Mat gray_img;
+        cv::cvtColor(img_map_clone2, gray_img, cv::COLOR_BGR2GRAY);
+        cv::Mat edges_img;
+        cv::Canny(gray_img, edges_img, this->canny_thr1, this->canny_thr2);
+        std::vector<cv::Vec4i> lines;
+        cv::HoughLinesP(edges_img, lines, this->hough_rho, this->hough_theta, this->hough_thr, this->hough_min_line_length, this->hough_max_line_gap);
+
+        // process lines
+        std::vector<LineInfo>().swap(this->lines_);
+        for (size_t i = 0; i < lines.size(); i++)
+        {
+                LineInfo line_info;
+                line_info.line = lines[i];
+                cv::Point2i pt1, pt2, pt0;
+                pt1.x = lines[i][0];
+                pt1.y = lines[i][1];
+                pt2.x = lines[i][2];
+                pt2.y = lines[i][3];
+                if (pt1.x > pt2.x)
+                {
+                        pt1.x = pt1.x + pt2.x;
+                        pt2.x = pt1.x - pt2.x;
+                        pt1.x = pt1.x - pt2.x;
+
+                        pt1.y = pt1.y + pt2.y;
+                        pt2.y = pt1.y - pt2.y;
+                        pt1.y = pt1.y - pt2.y;
+                }
+                
+                // fix bug for angle:-pi/2 and angle:pi/2 are different angles.
+                double theta = std::atan2(pt2.y - pt1.y, pt2.x - pt1.x);
+                theta = theta >= 0 ? theta : (theta + M_PI);
+                line_info.theta = theta;
+
+                pt0.x = 0, pt0.y = 0;
+                line_info.rho = calculate_height(pt0.x, pt0.y, pt1.x, pt1.y, pt2.x, pt2.y);
+
+                this->lines_.push_back(line_info);
+        }
+
+        std::sort(lines_.begin(), lines_.end(), [](LineInfo li1, LineInfo li2){return li1.theta < li2.theta;});
+
+        this->lines_filter(this->lines_);
+        wall_line_detection_msgs::msg::WallLinesStamped wall_lines_msg;
+        wall_lines_msg.header.frame_id = "map";
+        wall_lines_msg.header.stamp = now();
+        if (lines_.size() > 0)
+        {
+                for (size_t index = 0; index < lines_.size(); index++)
+                {
+                        wall_line_detection_msgs::msg::WallLine wall_line;
+                        auto line = lines_[index];
+                        WorldPose world_pose1 = map_to_world(line.line[0], line.line[1]);
+                        WorldPose world_pose2 = map_to_world(line.line[2], line.line[3]);
+                        wall_line.x1 = world_pose1.x;
+                        wall_line.y1 = world_pose1.y;
+                        wall_line.x2 = world_pose2.x;
+                        wall_line.y2 = world_pose2.y;
+                        wall_lines_msg.wall_lines.push_back(wall_line);
+                }
+        }
+
+        get_map_robot_tf();
+        double robot_x, robot_y;
+        robot_x = this->map_robot_tf.getOrigin().getX();
+        robot_y = this->map_robot_tf.getOrigin().getY();
+        // double robot_yaw = tf2::getYaw(this->map_robot_tf.getRotation());
+
+        RCLCPP_INFO(get_logger(), "robot_x: %f, robot_y: %f", robot_x, robot_y);
+
+        wall_lines_msg.line_selected = -1;
+
+        double distance_min = std::numeric_limits<float>::max();
+        for (size_t i = 0; i < wall_lines_msg.wall_lines.size(); i++)
+        {
+                RCLCPP_INFO(get_logger(), "----- %zd -----", i);
+                double distance_current;
+                auto line = wall_lines_msg.wall_lines[i];
+                distance_current = this->calculate_height(robot_x, robot_y, line.x1, line.y1, line.x2, line.y2);
+                RCLCPP_INFO(get_logger(), "distance_current: %f", distance_current);
+                if ((distance_current < distance_min) && (distance_current < line_distance_max))
+                {
+                        distance_min = distance_current;
+                        wall_lines_msg.line_selected = i;
+                }
+        }
+
+        wall_lines_pub_->publish(wall_lines_msg);
+        
+        size_t color_size = this->colors.size();
+        cv::Mat img_map_empty_clone2 = this->img_map_empty_.clone();
+        auto robot_pose_map = this->word_to_picture_bounded(robot_x, robot_y);
+        cv::circle(img_map_empty_clone2, cv::Point(robot_pose_map.x, robot_pose_map.y), 3, this->color_selected, 1, cv::LINE_AA);
+        for (size_t i = 0; i < wall_lines_msg.wall_lines.size(); i++)
+        {
+                cv::Vec4i l = this->lines_[i].line;
+                if ((int)i != wall_lines_msg.line_selected)
+                {
+                        cv::line(img_map_empty_clone2, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), this->colors[i % color_size], 1, cv::LINE_AA);
+                }
+                else
+                {
+                        cv::line(img_map_empty_clone2, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), this->color_selected, 2, cv::LINE_AA);
+                }                
+        }
+
+        if (this->imshow_laser)
+        {
+                cv::namedWindow("laser_scan", this->window_type);
+                cv::imshow("laser_scan", img_map_empty_clone);
+        }
+        
+        if (this->imshow_edge)
+        {
+                cv::namedWindow("edges", this->window_type);
+                cv::imshow("edges", edges_img);
+        }
+
+        if (this->imshow_line)
+        {
+                cv::namedWindow("lines", this->window_type);
+                cv::imshow("lines", img_map_empty_clone2);
+        }
+
+        if (this->imshow_laser || this->imshow_edge || this->imshow_line)
+        {
+                cv::waitKey(this->imshow_wait);
+        }   
+}
+
+void WallLineDetection::all_lasers_callback(
+        const LaserScanMsg::ConstSharedPtr &msg_front,
+        const LaserScanMsg::ConstSharedPtr &msg_left,
+        const LaserScanMsg::ConstSharedPtr &msg_right)
+{
+        std::vector<MapPose>().swap(this->laserscan_points_vector);
+        double yaw, yaw_delta;
+
+        std::vector<LaserScanMsg::ConstSharedPtr> msgs_ptr;
+        msgs_ptr.push_back(msg_front);
+        msgs_ptr.push_back(msg_left);
+        msgs_ptr.push_back(msg_right);
+
+        for (size_t index = 0; index < msgs_ptr.size(); index++)
+        {
+                auto msg_ptr = msgs_ptr[index];
+                yaw = msg_ptr->angle_min;
+                yaw_delta = msg_ptr->angle_increment;
+
+                for (int i = 0; i < (int) msg_ptr->ranges.size(); i++, yaw += yaw_delta)
+                {
+                        // RCLCPP_DEBUG(this->get_logger(), "yaw: %f", yaw);
+                        double range = msg_ptr->ranges[i];
+                        if(std::isinf(range) || range < msg_ptr->range_min || range > msg_ptr->range_max)
+                        {
+                                continue;
+                        }
+                        else
+                        {
+                                tf2::Transform tf_laserscan_point, tf_map_point;
+                                tf_laserscan_point.setIdentity();
+                                double x, y, w_x, w_y;
+                                x = std::cos(yaw) * range;
+                                y = std::sin(yaw) * range;
+                                tf_laserscan_point.setOrigin(tf2::Vector3(x,y,0));
+                                this->get_map_laser_link_tf(msg_ptr->header.frame_id);
+                                tf_map_point = this->map_laser_link_tf * tf_laserscan_point;
+                                w_x = tf_map_point.getOrigin().getX();
+                                w_y = tf_map_point.getOrigin().getY();
+                                MapPose map_pose = this->word_to_picture_bounded(w_x, w_y);
+                                this->laserscan_points_vector.push_back(map_pose);
+                                // RCLCPP_DEBUG(this->get_logger(), "range: %f, yaw: %f", range, yaw);
+                                // RCLCPP_DEBUG(this->get_logger(), "w_x: %f, w_y: %f", w_x, w_y);
+                                // RCLCPP_DEBUG(this->get_logger(), "x: %d, y: %d", map_pose.x, map_pose.y);
+                        }
+                }
+        }
+}
+
 void WallLineDetection::laserscan_sub_callback_(const LaserScanMsg::SharedPtr msg)
 {
         this->laserscan_input_current_ = *msg;
@@ -175,7 +376,6 @@ void WallLineDetection::laserscan_sub_callback_(const LaserScanMsg::SharedPtr ms
         if ((int)queue_size == this->laserscan_queue_size_)
         {
                 this->laserscan_output_ = this->process_laserscan_queue(this->laserscan_queue_);
-                this->laserscan_pub_->publish(this->laserscan_output_);
                 std::vector<MapPose>().swap(this->laserscan_points_vector);
                 double yaw = this->laserscan_output_.angle_min;
                 double yaw_delta = this->laserscan_output_.angle_increment;
@@ -195,6 +395,7 @@ void WallLineDetection::laserscan_sub_callback_(const LaserScanMsg::SharedPtr ms
                                 x = std::cos(yaw) * range;
                                 y = std::sin(yaw) * range;
                                 tf_laserscan_point.setOrigin(tf2::Vector3(x,y,0));
+                                this->get_map_laser_link_tf(laserscan_output_.header.frame_id);
                                 tf_map_point = this->map_laser_link_tf * tf_laserscan_point;
                                 w_x = tf_map_point.getOrigin().getX();
                                 w_y = tf_map_point.getOrigin().getY();
@@ -205,108 +406,7 @@ void WallLineDetection::laserscan_sub_callback_(const LaserScanMsg::SharedPtr ms
                                 // RCLCPP_DEBUG(this->get_logger(), "x: %d, y: %d", map_pose.x, map_pose.y);
                         }
                 }
-
-                auto img_map_empty_clone = this->img_map_empty_.clone();
-                // RCLCPP_DEBUG(this->get_logger(), "size: %zu", this->laserscan_points_vector.size());
-                for(int i = 0; i< (int)this->laserscan_points_vector.size(); i++)
-                {
-                        MapPose map_pose = this->laserscan_points_vector[i];                        
-                        img_map_empty_clone.at<cv::Vec3b>(map_pose.y, map_pose.x)[0] = 0;
-                        img_map_empty_clone.at<cv::Vec3b>(map_pose.y, map_pose.x)[1] = 0;
-                        img_map_empty_clone.at<cv::Vec3b>(map_pose.y, map_pose.x)[2] = 255;
-                }
-
-                cv::Mat img_map_clone2 = img_map_empty_clone.clone();
-                cv::Mat gray_img;
-                cv::cvtColor(img_map_clone2, gray_img, cv::COLOR_BGR2GRAY);
-                cv::Mat edges_img;
-                cv::Canny(gray_img, edges_img, this->canny_thr1, this->canny_thr2);
-                std::vector<cv::Vec4i> lines;
-                cv::HoughLinesP(edges_img, lines, this->hough_rho, this->hough_theta, this->hough_thr, this->hough_min_line_length, this->hough_max_line_gap);
-
-                // process lines
-                std::vector<LineInfo>().swap(this->lines_);
-                for (size_t i = 0; i < lines.size(); i++)
-                {
-                        LineInfo line_info;
-                        line_info.line = lines[i];
-                        cv::Point2i pt1, pt2, pt0;
-                        pt1.x = lines[i][0];
-                        pt1.y = lines[i][1];
-                        pt2.x = lines[i][2];
-                        pt2.y = lines[i][3];
-                        if (pt1.x > pt2.x)
-                        {
-                                pt1.x = pt1.x + pt2.x;
-                                pt2.x = pt1.x - pt2.x;
-                                pt1.x = pt1.x - pt2.x;
-
-                                pt1.y = pt1.y + pt2.y;
-                                pt2.y = pt1.y - pt2.y;
-                                pt1.y = pt1.y - pt2.y;
-                        }
-                        line_info.theta = std::atan2(pt2.y - pt1.y, pt2.x - pt1.x);
-
-                        pt0.x = 0, pt0.y = 0;
-                        line_info.rho = calculate_height(pt0.x, pt0.y, pt1.x, pt1.y, pt2.x, pt2.y);
-
-                        this->lines_.push_back(line_info);
-                }
-
-                std::sort(lines_.begin(), lines_.end(), [](LineInfo li1, LineInfo li2){return li1.theta < li2.theta;});
-
-                this->lines_filter(this->lines_);
-                wall_line_detection_msgs::msg::WallLinesStamped wall_lines_msg;
-                wall_lines_msg.header.frame_id = "map";
-                wall_lines_msg.header.stamp = now();
-                if (lines_.size() > 0)
-                {
-                        for (size_t index = 0; index < lines_.size(); index++)
-                        {
-                                wall_line_detection_msgs::msg::WallLine wall_line;
-                                auto line = lines_[index];
-                                WorldPose world_pose1 = map_to_world(line.line[0], line.line[1]);
-                                WorldPose world_pose2 = map_to_world(line.line[2], line.line[3]);
-                                wall_line.x1 = world_pose1.x;
-                                wall_line.y1 = world_pose1.y;
-                                wall_line.x2 = world_pose2.x;
-                                wall_line.y2 = world_pose2.y;
-                                wall_lines_msg.wall_lines.push_back(wall_line);
-                        }
-                }
-                wall_lines_pub_->publish(wall_lines_msg);
-                
-                size_t color_size = this->colors.size();
-                cv::Mat img_map_empty_clone2 = this->img_map_empty_.clone();
-                for (size_t i = 0; i < this->lines_.size(); i++)
-                {
-                        cv::Vec4i l = this->lines_[i].line;
-                        cv::line(img_map_empty_clone2, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), this->colors[ i % (color_size + 1)], 1, cv::LINE_AA);
-                }
-
-                if (this->imshow_laser)
-                {
-                        cv::namedWindow("laser_scan", this->window_type);
-                        cv::imshow("laser_scan", img_map_empty_clone);
-                }
-                
-                if (this->imshow_edge)
-                {
-                        cv::namedWindow("edges", this->window_type);
-                        cv::imshow("edges", edges_img);
-                }
-
-                if (this->imshow_line)
-                {
-                        cv::namedWindow("lines", this->window_type);
-                        cv::imshow("lines", img_map_empty_clone2);
-                }
-
-                if (this->imshow_laser || this->imshow_edge || this->imshow_line)
-                {
-                        cv::waitKey(this->imshow_wait);
-                }
-                
+                process_(); 
         }
 }
 
@@ -438,8 +538,8 @@ void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
         int index = 0;
         for (auto iter = lines_infos.begin(); iter != lines_infos.end(); iter++)
         {
-                RCLCPP_DEBUG(get_logger(), "line%d: [(%d, %d), (%d, %d)]", index,
-                        iter->line[0], iter->line[1], iter->line[2], iter->line[3]);
+                RCLCPP_DEBUG(get_logger(), "line%d: [(%d, %d), (%d, %d)], rho: %f, theta: %f", index,
+                        iter->line[0], iter->line[1], iter->line[2], iter->line[3], iter->rho, iter->theta);
                 index++;
         }
         
@@ -454,8 +554,10 @@ void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
                {
                         RCLCPP_DEBUG(get_logger(), "line%d: [(%d, %d), (%d, %d)]", (index + index2++),
                                 iter2->line[0], iter2->line[1], iter2->line[2], iter2->line[3]);
-                        if (std::abs(iter1->theta - iter2->theta) > this->theta_thr)
+                        double delta_theta_abs = std::abs(iter1->theta - iter2->theta);
+                        if (delta_theta_abs > this->theta_thr)
                         {
+                                RCLCPP_DEBUG(get_logger(),"theta1: %f, theta2: %f, delta_theta_abs: %f, theta_thr: %f", iter1->theta, iter2->theta, delta_theta_abs, theta_thr);
                                 RCLCPP_DEBUG(get_logger(), "break for theta threshold.");
                                 break;
                         }
@@ -468,9 +570,10 @@ void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
                                         (iter1->line[1] + iter1->line[3]) / 2, iter2->line[0], iter2->line[1], iter2->line[2], iter2->line[3]));
                                 if (vertical_distance > this->vertical_thr)
                                 {
-                                RCLCPP_DEBUG(get_logger(), "break for vertical disntance threshold.");
+                                RCLCPP_DEBUG(get_logger(), "break for vertical distance threshold.");
                                 RCLCPP_DEBUG(get_logger(), "vertical_distance: %f, thre: %f", vertical_distance, this->vertical_thr);
-                                break;
+                                iter2++;
+                                continue;
                                 }
                                 else
                                 {
@@ -498,7 +601,7 @@ void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
                                         line2_pt1_copy = line2_pt1;
                                         line2_pt2_copy = line2_pt2;
 
-                                        bool merge_occurred = this->merge_lines(line1_pt1, line1_pt2, line2_pt1, line2_pt2, (theta1 + theta2) / 2.0);
+                                        bool merge_occurred = this->merge_lines(line1_pt1, line1_pt2, line2_pt1, line2_pt2, (theta1 + theta2) / 2.0, get_logger());
 
                                         if(merge_occurred)
                                         {
@@ -521,6 +624,8 @@ void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
                                         }
                                         else
                                         {
+                                                RCLCPP_DEBUG(get_logger(), "line1 => rho: %f, theta: %f", rho1, theta1);
+                                                RCLCPP_DEBUG(get_logger(), "line2 => rho: %f, theta: %f", rho2, theta2);
                                                 RCLCPP_DEBUG(get_logger(), "line [(%d, %d), (%d, %d)] and line [(%d, %d), (%d, %d)] are different lines.",
                                                         line1_pt1_copy.x, line1_pt1_copy.y, line1_pt2_copy.x, line1_pt2_copy.y,
                                                         line2_pt1_copy.x, line2_pt1_copy.y, line2_pt2_copy.x, line2_pt2_copy.y);
@@ -541,7 +646,7 @@ void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
         }
 }
 
-bool  WallLineDetection::merge_lines(cv::Point2i& pt1, cv::Point2i& pt2, cv::Point2i pt3, cv::Point2i pt4, double theta)
+bool  WallLineDetection::merge_lines(cv::Point2i& pt1, cv::Point2i& pt2, cv::Point2i pt3, cv::Point2i pt4, double theta, rclcpp::Logger logger)
 {
         bool ret = false;
         
@@ -551,8 +656,41 @@ bool  WallLineDetection::merge_lines(cv::Point2i& pt1, cv::Point2i& pt2, cv::Poi
 
         if (delta_x > delta_y) // major axis => X
         {
+                // fix bug, pt1.x 应该小于 pt2.x, pt3.x 同样应该小于 pt4.x
+                RCLCPP_DEBUG(logger, "major axis => X");
+                if (pt1.x > pt2.x)
+                {
+                        RCLCPP_DEBUG(logger, "pt1.x > pt2.x, Need swap pt1 and pt2");
+                        RCLCPP_DEBUG(logger, "before swap, pt1(%d, %d), pt2(%d, %d)", pt1.x, pt1.y, pt2.x, pt2.y);
+                        pt1.x = pt1.x + pt2.x;
+                        pt1.y = pt1.y + pt2.y;
+
+                        pt2.x = pt1.x - pt2.x;
+                        pt2.y = pt1.y - pt2.y;
+
+                        pt1.x = pt1.x - pt2.x;
+                        pt1.y = pt1.y - pt2.y;
+                        RCLCPP_DEBUG(logger, "after  swap, pt1(%d, %d), pt2(%d, %d)", pt1.x, pt1.y, pt2.x, pt2.y);
+                }
+                if (pt3.x > pt4.x)
+                {
+                        RCLCPP_DEBUG(logger, "pt3.x > pt4.x, Need swap pt3 and pt4");
+                        RCLCPP_DEBUG(logger, "before swap, pt3(%d, %d), pt4(%d, %d)", pt3.x, pt3.y, pt4.x, pt4.y);
+                        pt3.x = pt3.x + pt4.x;
+                        pt3.y = pt3.y + pt4.y;
+
+                        pt4.x = pt3.x - pt4.x;
+                        pt4.y = pt3.y - pt4.y;
+
+                        pt3.x = pt3.x - pt4.x;
+                        pt3.y = pt3.y - pt4.y;
+                        RCLCPP_DEBUG(logger, "after  swap, pt3(%d, %d), pt4(%d, %d)", pt3.x, pt3.y, pt4.x, pt4.y);
+                }
+                
                 if (pt1.x < pt3.x)
                 {
+                        RCLCPP_DEBUG(logger, "pt1.x < pt3.x, horizontal_thr: %d,theta: %f, cos(theta): %f, delta: %f",
+                                 this->horizontal_thr, theta, cos(theta), this->horizontal_thr / cos(theta));
                         if (pt3.x < pt2.x + this->horizontal_thr / cos(theta))  // Meet the merger conditions
                         {
                                 // start point, assignment
@@ -569,6 +707,8 @@ bool  WallLineDetection::merge_lines(cv::Point2i& pt1, cv::Point2i& pt2, cv::Poi
                 }
                 else
                 {
+                        RCLCPP_DEBUG(logger, "pt1.x > pt3.x, horizontal_thr: %d,theta: %f, cos(theta): %f, delta: %f",
+                                 this->horizontal_thr, theta, cos(theta), this->horizontal_thr / cos(theta));
                         if (pt1.x < pt4.x + this->horizontal_thr / cos(theta)) // Meet the merger conditions
                         {
                                 // start point, assignment
@@ -586,9 +726,42 @@ bool  WallLineDetection::merge_lines(cv::Point2i& pt1, cv::Point2i& pt2, cv::Poi
         }
         else // major axis => Y
         {
+                RCLCPP_DEBUG(logger, "major axis => Y");
+                // fix bug, pt1.y 应该小于 pt2.y, pt3.y 同样应该小于 pt4.y
+                if (pt1.y > pt2.y)
+                {       
+                        RCLCPP_DEBUG(logger, "pt1.y > pt2.y, Need swap pt1 and pt2");
+                        RCLCPP_DEBUG(logger, "before swap, pt1(%d, %d), pt2(%d, %d)", pt1.x, pt1.y, pt2.x, pt2.y);
+                        pt1.x = pt1.x + pt2.x;
+                        pt1.y = pt1.y + pt2.y;
+
+                        pt2.x = pt1.x - pt2.x;
+                        pt2.y = pt1.y - pt2.y;
+
+                        pt1.x = pt1.x - pt2.x;
+                        pt1.y = pt1.y - pt2.y;
+                        RCLCPP_DEBUG(logger, "after  swap, pt1(%d, %d), pt2(%d, %d)", pt1.x, pt1.y, pt2.x, pt2.y);
+                }
+                if (pt3.y > pt4.y)
+                {
+                        RCLCPP_DEBUG(logger, "pt3.y > pt4.y, Need swap pt3 and pt4");
+                        RCLCPP_DEBUG(logger, "before swap, pt3(%d, %d), pt4(%d, %d)", pt3.x, pt3.y, pt4.x, pt4.y);
+                        pt3.x = pt3.x + pt4.x;
+                        pt3.y = pt3.y + pt4.y;
+
+                        pt4.x = pt3.x - pt4.x;
+                        pt4.y = pt3.y - pt4.y;
+
+                        pt3.x = pt3.x - pt4.x;
+                        pt3.y = pt3.y - pt4.y;
+                        RCLCPP_DEBUG(logger, "after  swap, pt3(%d, %d), pt4(%d, %d)", pt3.x, pt3.y, pt4.x, pt4.y);
+                }
+
                 if (pt1.y < pt3.y)
                 {
-                        if (pt3.y < pt2.y + this->horizontal_thr / sin(theta))  // Meet the merger conditions
+                        RCLCPP_DEBUG(logger, "pt1.y < pt3.y, horizontal_thr: %d,theta: %f, sin(std::abs(theta)): %f, delta: %f",
+                                 this->horizontal_thr, theta, sin(std::abs(theta)), this->horizontal_thr / sin(std::abs(theta)));
+                        if (pt3.y < pt2.y + this->horizontal_thr / sin(std::abs(theta)))  // Meet the merger conditions
                         {
                                 // start point, assignment
                                 pt1 = pt1; // just for understand clearly
@@ -604,7 +777,9 @@ bool  WallLineDetection::merge_lines(cv::Point2i& pt1, cv::Point2i& pt2, cv::Poi
                 }
                 else
                 {
-                        if (pt1.y < pt4.y + this->horizontal_thr / sin(theta)) // Meet the merger conditions
+                        RCLCPP_DEBUG(logger, "pt1.y > pt3.y, horizontal_thr: %d,theta: %f, sin(std::abs(theta)): %f, delta: %f",
+                                 this->horizontal_thr, theta, sin(std::abs(theta)), this->horizontal_thr / sin(std::abs(theta)));
+                        if (pt1.y < pt4.y + this->horizontal_thr / sin(std::abs(theta))) // Meet the merger conditions
                         {
                                 // start point, assignment
                                 pt1 = pt3; 

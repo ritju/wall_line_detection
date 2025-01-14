@@ -1,12 +1,11 @@
 wall_line_detection:
   ros__parameters:
-    laserscan_topic_sub_name: "/scan"
-    laserscan_topic_pub_name: "/scan_converged"
+    laserscan_topic_sub_name: ["/scan"]
+    # laserscan_topic_sub_name: ["/scan", "ydscan_l", "ydscan_r"]
     map_topic_sub_name: "/map"
     laserscan_queue_size: 2
     map_frame: "map"
     base_link_frame: "base_link"
-    laser_link_frame: "laser_link"
     canny_thr1: 100.0
     canny_thr2: 200.0
     hough_rho: 3.0
@@ -14,15 +13,16 @@ wall_line_detection:
     hough_thr: 20
     hough_min_line_length: 40.0
     hough_max_line_gap: 10.0
-    imshow_wait: 20
+    imshow_wait: 100
     vertical_thr: 6.0
-    horizontal_thr: 35
-    theta_thr: 0.087266 # pi / 180 * N
+    horizontal_thr: 45
+    theta_thr: 0.17453 # pi / 180 * N => (0.017453 * N)
     imshow_map: false
     imshow_laser: false
     imshow_edge: false
-    imshow_line: false
+    imshow_line: true
     window_type: 1 # nomal=0, autosize=1
+    line_distance_max: 4.0
 
     
 

@@ -12,11 +12,19 @@
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2/utils.h"
 #include "wall_line_detection_msgs/msg/wall_lines_stamped.hpp"
 
 #include <opencv2/opencv.hpp>
 
 #include <queue>
+
+// message filter
+#include <message_filters/subscriber.h>
+#include <message_filters/time_synchronizer.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
+
 
 namespace wall_line_detection_pkg
 {
@@ -24,7 +32,8 @@ namespace wall_line_detection_pkg
 using LaserScanMsg = sensor_msgs::msg::LaserScan;
 using OccupancyGridMsg = nav_msgs::msg::OccupancyGrid;
 
-
+using SyncPolicy = message_filters::sync_policies::ApproximateTime<LaserScanMsg, LaserScanMsg, LaserScanMsg>;
+using Synchronizer = message_filters::Synchronizer<SyncPolicy>;
 
 struct MapPose
 {
@@ -68,22 +77,32 @@ explicit WallLineDetection(const rclcpp::NodeOptions &options = rclcpp::NodeOpti
 rclcpp::Subscription<LaserScanMsg>::SharedPtr laserscan_sub_;
 rclcpp::Subscription<OccupancyGridMsg>::SharedPtr map_sub_;
 
+// messages filter
+message_filters::Subscriber<LaserScanMsg> laser_front_sub_;
+message_filters::Subscriber<LaserScanMsg> laser_left_sub_;
+message_filters::Subscriber<LaserScanMsg> laser_right_sub_;
+std::shared_ptr<Synchronizer> sync_;
+
+void all_lasers_callback(
+        const LaserScanMsg::ConstSharedPtr &msg_front,
+        const LaserScanMsg::ConstSharedPtr &msg_left,
+        const LaserScanMsg::ConstSharedPtr &msg_right);
+
 // pubs
-rclcpp::Publisher<LaserScanMsg>::SharedPtr laserscan_pub_;
 rclcpp::Publisher<wall_line_detection_msgs::msg::WallLinesStamped>::SharedPtr wall_lines_pub_;
 
 // callback
 void laserscan_sub_callback_(const LaserScanMsg::SharedPtr msg);
 void map_sub_callback_(const OccupancyGridMsg::SharedPtr msg);
 
+void process_();
+
 // params
-std::string laserscan_topic_sub_name;
-std::string laserscan_topic_pub_name;
+std::vector<std::string> laserscan_topic_sub_name;
 std::string map_topic_sub_name;
 int laserscan_queue_size_;
 std::string map_frame;
 std::string base_link_frame;
-std::string laser_link_frame;
 double canny_thr1;
 double canny_thr2;
 double hough_rho;
@@ -100,6 +119,7 @@ bool imshow_laser;
 bool imshow_edge;
 bool imshow_line;
 int window_type;
+float line_distance_max;
 
 // member functions
 typedef std::recursive_mutex mutex_t;
@@ -124,7 +144,7 @@ void init_params();
  * @param void
  * @return void
 */
-void get_map_laser_link_tf();
+void get_map_laser_link_tf(std::string laser_frame);
 
 /**
  * @brief 得到map到robot的tf
@@ -173,7 +193,7 @@ double calculate_vertical_distance_dummy(cv::Vec4i line1, cv::Vec4i line2)
 
 void lines_filter(std::vector<LineInfo> &line_infos);
 
-bool merge_lines(cv::Point2i& pt1, cv::Point2i& pt2, cv::Point2i pt3, cv::Point2i pt4, double theta);
+bool merge_lines(cv::Point2i& pt1, cv::Point2i& pt2, cv::Point2i pt3, cv::Point2i pt4, double theta, rclcpp::Logger logger);
 
 // member variables
 OccupancyGridMsg map_grid_;
@@ -198,12 +218,14 @@ std::vector<MapPose> laserscan_points_vector;
 
 std::vector<cv::Scalar> colors = 
 {
-        cv::Scalar(0, 255, 0),
-        cv::Scalar(255, 0, 0),
-        cv::Scalar(255, 255, 0),
-        cv::Scalar(255, 0, 255),
-        cv::Scalar(0, 255, 255)
+        cv::Scalar(0, 255, 0),   // 绿
+        cv::Scalar(255, 0, 0),   // 蓝
+        cv::Scalar(255, 255, 0), // 青
+        cv::Scalar(255, 0, 255), // 紫
+        cv::Scalar(0, 255, 255)  // 黄
 };
+
+cv::Scalar color_selected = cv::Scalar(0, 0, 255);  // 红
 
 std::vector<LineInfo> lines_;
 
