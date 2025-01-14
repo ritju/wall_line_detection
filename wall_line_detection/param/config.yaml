@@ -21,7 +21,7 @@ wall_line_detection:
     imshow_laser: false
     imshow_edge: false
     imshow_line: true
-    window_type: 1 # nomal=0, autosize=1
+    window_type: 0 # nomal=0, autosize=1
     line_distance_max: 4.0
 
     

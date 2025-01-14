@@ -247,9 +247,9 @@ void WallLineDetection::process_()
         double robot_x, robot_y;
         robot_x = this->map_robot_tf.getOrigin().getX();
         robot_y = this->map_robot_tf.getOrigin().getY();
-        // double robot_yaw = tf2::getYaw(this->map_robot_tf.getRotation());
+        double robot_yaw = tf2::getYaw(this->map_robot_tf.getRotation());
 
-        RCLCPP_INFO(get_logger(), "robot_x: %f, robot_y: %f", robot_x, robot_y);
+        RCLCPP_INFO(get_logger(), "robot_x: %f, robot_y: %f, robot_yaw: %f", robot_x, robot_y, robot_yaw);
 
         wall_lines_msg.line_selected = -1;
 
@@ -272,8 +272,22 @@ void WallLineDetection::process_()
         
         size_t color_size = this->colors.size();
         cv::Mat img_map_empty_clone2 = this->img_map_empty_.clone();
-        auto robot_pose_map = this->word_to_picture_bounded(robot_x, robot_y);
-        cv::circle(img_map_empty_clone2, cv::Point(robot_pose_map.x, robot_pose_map.y), 3, this->color_selected, 1, cv::LINE_AA);
+        auto robot_pose_pic = this->word_to_picture_bounded(robot_x, robot_y);
+        cv::circle(img_map_empty_clone2, cv::Point(robot_pose_pic.x, robot_pose_pic.y), 4, this->color_selected, 1, cv::LINE_AA);
+
+        cv::Point2f end_point_map;
+        end_point_map.x = robot_x + 0.5 * cos(robot_yaw);
+        end_point_map.y = robot_y + 0.5 * sin(robot_yaw);
+        auto robot_orientation_end = this->word_to_picture_bounded(end_point_map.x, end_point_map.y);
+
+        cv::Point2i start_point, end_point;
+        start_point.x = robot_pose_pic.x;
+        start_point.y = robot_pose_pic.y;
+        end_point.x = robot_orientation_end.x;
+        end_point.y = robot_orientation_end.y;
+
+        cv::line(img_map_empty_clone2, start_point, end_point, this->color_selected, 1, cv::LINE_AA);
+
         for (size_t i = 0; i < wall_lines_msg.wall_lines.size(); i++)
         {
                 cv::Vec4i l = this->lines_[i].line;
