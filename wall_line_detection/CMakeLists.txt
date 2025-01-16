@@ -11,6 +11,7 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_cmake REQUIRED)
 find_package(nav2_common REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -30,10 +31,12 @@ include_directories(
 )
 
 add_library(wall_line_detection_lib SHARED src/wall_line_detection.cpp)
+add_library(wall_line_test_lib SHARED src/test.cpp)
 
 set(dependencies
   ament_cmake
   rclcpp
+  rclcpp_action
   tf2_geometry_msgs
   tf2
   tf2_ros
@@ -47,17 +50,26 @@ set(dependencies
   wall_line_detection_msgs
 )
 target_include_directories(wall_line_detection_lib PUBLIC include)
+target_include_directories(wall_line_test_lib PUBLIC include)
 
 ament_target_dependencies(wall_line_detection_lib
   ${dependencies}
+)
+ament_target_dependencies(wall_line_test_lib
+${dependencies}
 )
 
 rclcpp_components_register_node(wall_line_detection_lib
     PLUGIN "wall_line_detection_pkg::WallLineDetection"
     EXECUTABLE wall_line_detection)
 
+rclcpp_components_register_node(wall_line_test_lib
+    PLUGIN "wall_line_detection_pkg::WallLineTest"
+    EXECUTABLE wall_line_test)
+
 install(TARGETS
   wall_line_detection_lib
+  wall_line_test_lib
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -72,7 +84,7 @@ install(DIRECTORY include/
 )
 
 ament_export_include_directories(include)
-ament_export_libraries(wall_line_detection_lib)
+ament_export_libraries(wall_line_detection_lib wall_line_test_lib)
 ament_export_dependencies(${dependencies})
 
 ament_package()
