@@ -5,11 +5,23 @@
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "rclcpp_components/register_node_macro.hpp"
 
+#include "tf2_ros/buffer.h"
+#include "tf2_ros/transform_listener.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2/utils.h"
+#include "angles/angles.h"
+
 #include "nav2_msgs/action/follow_path.hpp"
 #include "wall_line_detection_msgs/msg/wall_lines_stamped.hpp"
 
 namespace wall_line_detection_pkg
 {
+
+struct point
+{
+        float x;
+        float y;
+};
 
 /**
  *  墙线测试类
@@ -27,6 +39,22 @@ explicit WallLineTest(const rclcpp::NodeOptions &options = rclcpp::NodeOptions()
 */
 ~WallLineTest();
 
+// params
+std::string msg_topic_name_;
+float msg_time_tolerance_;
+bool use_offset_;
+float path_offset_;
+bool only_get_msg_once_;
+
+void init_params();
+
+void get_map_robot_tf();
+
+bool is_current(wall_line_detection_msgs::msg::WallLinesStamped msg); // 判断 msg_ 是否在允许的容差范围内
+
+void process_(wall_line_detection_msgs::msg::WallLine wall_line, float offset);
+
+nav_msgs::msg::Path generate_path(wall_line_detection_msgs::msg::WallLine wall_line, tf2::Transform tf_robot_pose, float offset);
 
 // subs
 rclcpp::Subscription<wall_line_detection_msgs::msg::WallLinesStamped>::SharedPtr wall_line_sub_;
@@ -35,6 +63,16 @@ void wall_line_sub_callback(const wall_line_detection_msgs::msg::WallLinesStampe
 
 // action client
 rclcpp_action::Client<nav2_msgs::action::FollowPath>::SharedPtr follow_path_client_;
+
+wall_line_detection_msgs::msg::WallLinesStamped msg_;
+
+bool current_; // 判断 msg_ 是否为最新
+bool get_msg_; // 测试时，只获取一次有效line的情况
+
+// tf2
+std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+tf2::Transform map_robot_tf;
 
 }; // end of class
 

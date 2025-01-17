@@ -23,6 +23,7 @@ find_package(capella_ros_msg REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(wall_line_detection_msgs REQUIRED)
+find_package(angles REQUIRED)
 
 nav2_package()
 
@@ -48,6 +49,7 @@ set(dependencies
   rclcpp_components
   OpenCV
   wall_line_detection_msgs
+  angles
 )
 target_include_directories(wall_line_detection_lib PUBLIC include)
 target_include_directories(wall_line_test_lib PUBLIC include)
