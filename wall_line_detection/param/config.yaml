@@ -22,16 +22,16 @@ wall_line_detection:
     imshow_edge: false
     imshow_line: true
     window_type: 0 # nomal=0, autosize=1
-    line_distance_max: 4.0
+    line_distance_max: 2.0
 
 
 wall_line_test:
   ros__parameters:
     msg_topic_name: "wall_lines_stamped"
     msg_time_tolerance: 0.2
-    use_offset: false
+    use_offset: true
     path_offset: 0.4
-    only_get_msg_once: true
+    only_get_msg_once: false
 
 
 

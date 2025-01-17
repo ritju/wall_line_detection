@@ -59,6 +59,9 @@ nav_msgs::msg::Path generate_path(wall_line_detection_msgs::msg::WallLine wall_l
 // subs
 rclcpp::Subscription<wall_line_detection_msgs::msg::WallLinesStamped>::SharedPtr wall_line_sub_;
 
+// pubs 
+rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr wall_line_path_pub_;
+
 void wall_line_sub_callback(const wall_line_detection_msgs::msg::WallLinesStamped::ConstSharedPtr msg);
 
 // action client

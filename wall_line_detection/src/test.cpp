@@ -19,6 +19,8 @@ rclcpp::Node("wall_line_test", options)
         sub_options.callback_group = cb_group_type;
         wall_line_sub_ = this->create_subscription<wall_line_detection_msgs::msg::WallLinesStamped>(this->msg_topic_name_, 
                 rclcpp::SensorDataQoS(), std::bind(&WallLineTest::wall_line_sub_callback, this, std::placeholders::_1), sub_options );
+        
+        wall_line_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("wall_line_path", rclcpp::QoS(10).best_effort());
 
         // follow_path action client
         follow_path_client_ = rclcpp_action::create_client<nav2_msgs::action::FollowPath>(this, "follow_path");
@@ -103,6 +105,7 @@ void WallLineTest::wall_line_sub_callback(const wall_line_detection_msgs::msg::W
                         {
                                 this->msg_ = *msg;
                                 this->get_msg_ = true;
+                                RCLCPP_DEBUG(get_logger(), "start process (only once)......");
                                 process_(msg_.wall_lines[msg_.line_selected], this->path_offset_);
                         }
                 }
@@ -117,6 +120,7 @@ void WallLineTest::wall_line_sub_callback(const wall_line_detection_msgs::msg::W
                 if (is_current(*msg) && msg->line_selected != -1)
                 {
                         this->msg_ = *msg;
+                        RCLCPP_DEBUG(get_logger(), "start process ......");
                         process_(msg_.wall_lines[msg_.line_selected], this->path_offset_);
                 }
         }
@@ -129,6 +133,10 @@ void WallLineTest::process_(wall_line_detection_msgs::msg::WallLine wall_line, f
         auto path = generate_path(wall_line, map_robot_tf, offset);
         auto goal = nav2_msgs::action::FollowPath::Goal();
         goal.path = path;
+
+        RCLCPP_DEBUG(get_logger(), "publish /wall_line_path topic");
+        RCLCPP_DEBUG(get_logger(), "path's poses size: %zd", path.poses.size());
+        wall_line_path_pub_->publish(path);
         follow_path_client_->async_send_goal(goal);
 }
 

@@ -249,18 +249,18 @@ void WallLineDetection::process_()
         robot_y = this->map_robot_tf.getOrigin().getY();
         double robot_yaw = tf2::getYaw(this->map_robot_tf.getRotation());
 
-        RCLCPP_INFO(get_logger(), "robot_x: %f, robot_y: %f, robot_yaw: %f", robot_x, robot_y, robot_yaw);
+        RCLCPP_DEBUG(get_logger(), "robot_x: %f, robot_y: %f, robot_yaw: %f", robot_x, robot_y, robot_yaw);
 
         wall_lines_msg.line_selected = -1;
 
         double distance_min = std::numeric_limits<float>::max();
         for (size_t i = 0; i < wall_lines_msg.wall_lines.size(); i++)
         {
-                RCLCPP_INFO(get_logger(), "----- %zd -----", i);
+                RCLCPP_DEBUG(get_logger(), "----- %zd -----", i);
                 double distance_current;
                 auto line = wall_lines_msg.wall_lines[i];
                 distance_current = this->calculate_height(robot_x, robot_y, line.x1, line.y1, line.x2, line.y2);
-                RCLCPP_INFO(get_logger(), "distance_current: %f", distance_current);
+                RCLCPP_DEBUG(get_logger(), "distance_current: %f", distance_current);
                 if ((distance_current < distance_min) && (distance_current < line_distance_max))
                 {
                         distance_min = distance_current;
