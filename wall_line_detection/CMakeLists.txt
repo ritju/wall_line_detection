@@ -24,6 +24,7 @@ find_package(rclcpp_components REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(wall_line_detection_msgs REQUIRED)
 find_package(angles REQUIRED)
+find_package(nav2_util REQUIRED)
 
 nav2_package()
 
@@ -50,6 +51,7 @@ set(dependencies
   OpenCV
   wall_line_detection_msgs
   angles
+  nav2_util
 )
 target_include_directories(wall_line_detection_lib PUBLIC include)
 target_include_directories(wall_line_test_lib PUBLIC include)

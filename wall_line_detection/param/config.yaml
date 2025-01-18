@@ -32,6 +32,7 @@ wall_line_test:
     use_offset: true
     path_offset: 0.4
     only_get_msg_once: false
+    action_frequency: 1.0
 
 
 

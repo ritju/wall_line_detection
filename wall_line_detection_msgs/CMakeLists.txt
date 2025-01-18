@@ -10,6 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 #添加消息文件和依赖
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -17,7 +18,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/WallLine.msg"
   "msg/WallLinesStamped.msg"
   
-  DEPENDENCIES geometry_msgs
+  DEPENDENCIES geometry_msgs sensor_msgs
  )
 
 if(BUILD_TESTING)

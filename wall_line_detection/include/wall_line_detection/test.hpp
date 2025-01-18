@@ -13,6 +13,9 @@
 
 #include "nav2_msgs/action/follow_path.hpp"
 #include "wall_line_detection_msgs/msg/wall_lines_stamped.hpp"
+#include "sensor_msgs/msg/laser_scan.hpp"
+
+#include "nav2_util/geometry_utils.hpp"
 
 namespace wall_line_detection_pkg
 {
@@ -21,6 +24,12 @@ struct point
 {
         float x;
         float y;
+};
+
+enum class wall_line_LR
+{
+        LEFT,    // 墙线在机器人的左手边
+        RIGHT    // 墙线在机器人的右手边
 };
 
 /**
@@ -45,6 +54,9 @@ float msg_time_tolerance_;
 bool use_offset_;
 float path_offset_;
 bool only_get_msg_once_;
+float action_frequency_;
+
+rclcpp::Time time_action_last_send_goal_;
 
 void init_params();
 
@@ -76,6 +88,14 @@ bool get_msg_; // 测试时，只获取一次有效line的情况
 std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
 tf2::Transform map_robot_tf;
+
+wall_line_LR wall_line_orientation;
+sensor_msgs::msg::LaserScan laserscan_;
+
+std::vector<float> sin_map;
+std::vector<float> cos_map;
+std::vector<point> scan_point_vec;
+bool sin_cos_map_generated{false};
 
 }; // end of class
 

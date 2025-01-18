@@ -9,6 +9,8 @@ rclcpp::Node("wall_line_test", options)
         RCLCPP_INFO(this->get_logger(), "wall line test node construction");
         this->init_params();
 
+        time_action_last_send_goal_ = now();
+
         // init tf2
         this->tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         this->tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*this->tf_buffer_);
@@ -39,12 +41,14 @@ void WallLineTest::init_params()
         this->declare_parameter<bool>("use_offset", false);
         this->declare_parameter<float>("path_offset", 0.5);
         this->declare_parameter<bool>("only_get_msg_once", false);
+        this->declare_parameter<float>("action_frequency", 2.0);
         
         this->msg_topic_name_ = this->get_parameter_or<std::string>("msg_topic_name", "wall_lines_stamped");
         this->msg_time_tolerance_ = this->get_parameter_or<float>("msg_time_tolerance", 1.0);
         this->use_offset_ = this->get_parameter_or<bool>("use_offset", false);
         this->path_offset_ = this->get_parameter_or<float>("path_offset", 0.5);
         this->only_get_msg_once_ = this->get_parameter_or<bool>("only_get_msg_once", false);
+        this->action_frequency_ = this->get_parameter_or<float>("action_frequency", 2.0);
 }
 
 void WallLineTest::get_map_robot_tf()
@@ -95,7 +99,27 @@ bool WallLineTest::is_current(wall_line_detection_msgs::msg::WallLinesStamped ms
 void WallLineTest::wall_line_sub_callback(const wall_line_detection_msgs::msg::WallLinesStamped::ConstSharedPtr msg)
 {
         // (void) msg;
+        this->laserscan_ = msg->laser_scan;
+
+        if (!sin_cos_map_generated)
+        {
+                sin_map.clear();
+                cos_map.clear();
+                int range_size = (int)laserscan_.ranges.size();
+                sin_map.resize(range_size);
+                cos_map.resize(range_size);
+
+                for (int i = 0; i < range_size; i++)
+                {
+                        float angle = laserscan_.angle_min + i * laserscan_.angle_increment;
+                        sin_map[i] = sin(angle);
+                        cos_map[i] = cos(angle);
+                }
+                sin_cos_map_generated = true;
+        }
         
+        scan_point_vec.clear();
+        scan_point_vec.resize(laserscan_.ranges.size());
 
         if (this->only_get_msg_once_)
         {
@@ -137,88 +161,246 @@ void WallLineTest::process_(wall_line_detection_msgs::msg::WallLine wall_line, f
         RCLCPP_DEBUG(get_logger(), "publish /wall_line_path topic");
         RCLCPP_DEBUG(get_logger(), "path's poses size: %zd", path.poses.size());
         wall_line_path_pub_->publish(path);
-        follow_path_client_->async_send_goal(goal);
+
+        rclcpp::Time now_time = now();
+        if ((now_time - time_action_last_send_goal_).seconds() > (1.0 / action_frequency_))
+        {
+                follow_path_client_->async_send_goal(goal);
+        }
 }
 
 nav_msgs::msg::Path WallLineTest::generate_path(wall_line_detection_msgs::msg::WallLine wall_line, tf2::Transform tf_robot, float offset)
 {
-      float resolution = 0.05;
 
-      double robot_x, robot_y, robot_theta;
-      robot_x = tf_robot.getOrigin().getX();
-      robot_y = tf_robot.getOrigin().getY();
+        get_map_robot_tf();
 
-      robot_theta = tf2::getYaw(tf_robot.getRotation());
+        double robot_x, robot_y, robot_theta;
+        robot_x = tf_robot.getOrigin().getX();
+        robot_y = tf_robot.getOrigin().getY();
 
-      // 判断wall_line的起点和终点
-      point start, end;
-      double angle1, angle2, dist_angle1, dist_angle2;
-      angle1 = std::atan2(wall_line.y2 - wall_line.y1, wall_line.x2 - wall_line.x1);
-      angle2 = std::atan2(wall_line.y1 - wall_line.y2, wall_line.x1 - wall_line.x2);
+        robot_theta = tf2::getYaw(tf_robot.getRotation());
 
-      dist_angle1 = std::abs(angles::shortest_angular_distance(robot_theta, angle1));
-      dist_angle2 = std::abs(angles::shortest_angular_distance(robot_theta, angle2));
+        // 判断wall_line的起点和终点
+        point start, end;
+        double angle1, angle2, dist_angle1, dist_angle2;
+        angle1 = std::atan2(wall_line.y2 - wall_line.y1, wall_line.x2 - wall_line.x1);
+        angle2 = std::atan2(wall_line.y1 - wall_line.y2, wall_line.x1 - wall_line.x2);
 
-      if (dist_angle1 < dist_angle2)
-      {
+        dist_angle1 = std::abs(angles::shortest_angular_distance(robot_theta, angle1));
+        dist_angle2 = std::abs(angles::shortest_angular_distance(robot_theta, angle2));
+
+        if (dist_angle1 < dist_angle2)
+        {
         start.x = wall_line.x1;
         start.y = wall_line.y1;
         end.x = wall_line.x2;
         end.y = wall_line.y2;
-      }
-      else
-      {
+        }
+        else
+        {
         start.x = wall_line.x2;
         start.y = wall_line.y2;
         end.x = wall_line.x1;
         end.y = wall_line.y1;
-      }
-      double angle_to_end = std::atan2(end.y - start.y, end.x - start.x);
-      double distance = std::hypot(end.y - start.y, end.x - start.x);
-      
-      nav_msgs::msg::Path path;
-      path.header.frame_id = "map";
-      path.header.stamp = this->msg_.header.stamp;
+        }
+        RCLCPP_DEBUG(get_logger(), "start x: %f, y: %f", start.x, start.y);
+        RCLCPP_DEBUG(get_logger(), "end   x: %f, y: %f", end.x, end.y);
 
-      geometry_msgs::msg::Pose pose;
-      double distance_generate;
+        double angle_to_end = std::atan2(end.y - start.y, end.x - start.x);
 
-      double angle_to_robot = std::atan2(robot_y - start.y, robot_x - start.x);
-      double angle_rotation = angles::shortest_angular_distance(angle_to_end, angle_to_robot);
-      if (use_offset_)
-      {   
+        nav_msgs::msg::Path path;
+        path.header.frame_id = "map";
+        path.header.stamp = this->msg_.header.stamp;
+
+        // geometry_msgs::msg::Pose pose;
+        // double distance = std::hypot(end.y - start.y, end.x - start.x);
+        // double distance_generate;
+        // float resolution = 0.05;
+
+        double angle_to_robot = std::atan2(robot_y - start.y, robot_x - start.x);
+        double angle_rotation = angles::shortest_angular_distance(angle_to_end, angle_to_robot);
+
         double angle_offset;
         if (angle_rotation > 0)
         {
+                wall_line_orientation = wall_line_LR::RIGHT;
                 angle_offset = angle_to_end + M_PI / 2.0;
         }
         else
         {
+                wall_line_orientation = wall_line_LR::LEFT;
                 angle_offset = angle_to_end - M_PI / 2.0;
         }
 
-        start.x = start.x + std::cos(angle_offset) * offset;
-        start.y = start.y + std::sin(angle_offset) * offset;
-        end.x = end.x + std::cos(angle_offset) * offset;
-        end.y = end.y + std::sin(angle_offset) * offset;
-      }
 
-      pose.position.x = start.x;
-      pose.position.y = start.y;
-      distance_generate = std::hypot(pose.position.y - start.y, pose.position.x - start.x);
+        switch(wall_line_orientation)
+        {
+                case wall_line_LR::RIGHT:
+                {
+                        RCLCPP_DEBUG(get_logger(), "wall_line => right");
+                        size_t index_start = 0, index_end = 0;
+                        float dis_start_min = std::numeric_limits<float>::max();
+                        float dis_end_min = std::numeric_limits<float>::max();
+                        float dis_start_current, dis_end_current;
+
+                        for (size_t i = 0; i < laserscan_.ranges.size(); i++)
+                        {
+                                float scan_point_x, scan_point_y;
+                                if (std::isinf(laserscan_.ranges[i]) || laserscan_.ranges[i] <= laserscan_.range_min || laserscan_.ranges[i] >= laserscan_.range_max)
+                                {
+                                        continue;
+                                }
+                                else
+                                {
+                                        scan_point_x = robot_x + laserscan_.ranges[i] * (cos(robot_theta) * cos_map[i] - sin(robot_theta) * sin_map[i]);
+                                        scan_point_y = robot_y + laserscan_.ranges[i] * (sin(robot_theta) * cos_map[i] + cos(robot_theta) * sin_map[i]);
+                                        dis_start_current = std::hypot(start.y - scan_point_y, start.x - scan_point_x);
+                                        dis_end_current = std::hypot(end.y - scan_point_y, end.x - scan_point_x);
+                                        if (dis_start_current < dis_start_min)
+                                        {
+                                                dis_start_min = dis_start_current;
+                                                index_start = i;
+                                        }
+                                        if (dis_end_current < dis_end_min)
+                                        {
+                                                dis_end_min = dis_end_current;
+                                                index_end = i;
+                                        }
+                                }
+                        }
+
+                        RCLCPP_DEBUG(get_logger(), "index_start: %zd, index_end: %zd", index_start, index_end);
+                        
+                        for (size_t index = index_start; index <= index_end; index++)
+                        {
+                                geometry_msgs::msg::PoseStamped poseStamped;
+                                poseStamped.header.frame_id = "map";
+                                poseStamped.pose.position.x = robot_x + laserscan_.ranges[index] * (cos(robot_theta) * cos_map[index] - sin(robot_theta) * sin_map[index]);
+                                poseStamped.pose.position.y = robot_y + laserscan_.ranges[index] * (sin(robot_theta) * cos_map[index] + cos(robot_theta) * sin_map[index]);
+                                poseStamped.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(angle_offset);
+                                if (use_offset_)
+                                {
+                                        poseStamped.pose.position.x = poseStamped.pose.position.x + offset * cos(angle_offset);
+                                        poseStamped.pose.position.y = poseStamped.pose.position.y + offset * sin(angle_offset);
+                                }
+                                else
+                                {
+                                     // do nothing   
+                                }
+                                path.poses.push_back(poseStamped);
+                        }
+                        break;
+                }
+                case wall_line_LR::LEFT:
+                {
+                        RCLCPP_DEBUG(get_logger(), "wall_line => left");
+                        size_t index_start = 0, index_end = 0;
+                        float dis_start_min = std::numeric_limits<float>::max();
+                        float dis_end_min = std::numeric_limits<float>::max();
+                        float dis_start_current, dis_end_current;
+
+                        for (size_t i = 0; i < laserscan_.ranges.size(); i++)
+                        {
+                                float scan_point_x, scan_point_y;
+                                if (std::isinf(laserscan_.ranges[i]) || laserscan_.ranges[i] <= laserscan_.range_min || laserscan_.ranges[i] >= laserscan_.range_max)
+                                {
+                                        continue;
+                                }
+                                else
+                                {
+                                        scan_point_x = robot_x + laserscan_.ranges[i] * (cos(robot_theta) * cos_map[i] - sin(robot_theta) * sin_map[i]);
+                                        scan_point_y = robot_y + laserscan_.ranges[i] * (sin(robot_theta) * cos_map[i] + cos(robot_theta) * sin_map[i]);
+                                        dis_start_current = std::hypot(start.y - scan_point_y, start.x - scan_point_x);
+                                        dis_end_current = std::hypot(end.y - scan_point_y, end.x - scan_point_x);
+                                        if (dis_start_current < dis_start_min)
+                                        {
+                                                dis_start_min = dis_start_current;
+                                                index_start = i;
+                                        }
+                                        if (dis_end_current < dis_end_min)
+                                        {
+                                                dis_end_min = dis_end_current;
+                                                index_end = i;
+                                        }
+                                }
+                        }
+
+                        RCLCPP_DEBUG(get_logger(), "index_start: %zd, index_end: %zd", index_start, index_end);
+                        
+                        for (size_t index = index_start; index >= index_end; index -= 10)
+                        {
+                                geometry_msgs::msg::PoseStamped poseStamped;
+                                poseStamped.header.frame_id = "map";
+                                poseStamped.pose.position.x = robot_x + laserscan_.ranges[index] * (cos(robot_theta) * cos_map[index] - sin(robot_theta) * sin_map[index]);
+                                poseStamped.pose.position.y = robot_y + laserscan_.ranges[index] * (sin(robot_theta) * cos_map[index] + cos(robot_theta) * sin_map[index]);
+                                poseStamped.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(angle_offset);
+                                if (use_offset_)
+                                {
+                                        poseStamped.pose.position.x = poseStamped.pose.position.x + offset * cos(angle_offset);
+                                        poseStamped.pose.position.y = poseStamped.pose.position.y + offset * sin(angle_offset);
+                                }
+                                else
+                                {
+                                     // do nothing   
+                                }
+                                path.poses.push_back(poseStamped);
+                        }
+                        break;
+                }
+        }
+
+        if (use_offset_)
+        { 
+                start.x = start.x + std::cos(angle_offset) * offset;
+                start.y = start.y + std::sin(angle_offset) * offset;
+                end.x = end.x + std::cos(angle_offset) * offset;
+                end.y = end.y + std::sin(angle_offset) * offset;
+        }
+
+      // path 只包含起点和终点
+//       (void) resolution;
+//       (void) distance_generate;
+//       (void) distance;
+//       geometry_msgs::msg::PoseStamped poseStamped;
+//       poseStamped.header.frame_id = "map";
+
+//       pose.position.x = start.x;
+//       pose.position.y = start.y;
+//       pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(angle_to_end);
+
+//       poseStamped.pose = pose;
+//       path.poses.push_back(poseStamped);
+
+//       pose.position.x = end.x;
+//       pose.position.y = end.y;
+//       pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(angle_to_end);
+
+//       poseStamped.pose = pose;
+//       path.poses.push_back(poseStamped);
+//       RCLCPP_DEBUG(get_logger(), "path size: %zd", path.poses.size());
+
+      // 起点和终点之间生成连续点的path
+//       pose.position.x = start.x;
+//       pose.position.y = start.y;
+//       pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(angle_to_end);
+//       distance_generate = std::hypot(pose.position.y - start.y, pose.position.x - start.x);
+
+//       geometry_msgs::msg::PoseStamped poseStamped;
+//       poseStamped.header.frame_id = "map";
       
-      while (distance_generate < distance)
-      {
-        geometry_msgs::msg::PoseStamped poseStamped;
-        poseStamped.header.frame_id = "map";
-        poseStamped.pose = pose;
-        path.poses.push_back(poseStamped);
+//       while (distance_generate < distance)
+//       {
+//         poseStamped.pose = pose;
+//         path.poses.push_back(poseStamped);
 
-        // 更新 pose
-        pose.position.x = pose.position.x + resolution * std::cos(angle_to_end);
-        pose.position.y = pose.position.y + resolution * std::sin(angle_to_end);
-        distance_generate = std::hypot(pose.position.y - start.y, pose.position.x - start.x);
-      }
+//         // 更新 pose
+//         pose.position.x = pose.position.x + resolution * std::cos(angle_to_end);
+//         pose.position.y = pose.position.y + resolution * std::sin(angle_to_end);
+//         pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(angle_to_end);
+//         distance_generate = std::hypot(pose.position.y - start.y, pose.position.x - start.x);
+//       }
+//       poseStamped.pose = pose;
+//       path.poses.push_back(poseStamped);
       
       return path;
 }

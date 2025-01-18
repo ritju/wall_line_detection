@@ -267,6 +267,7 @@ void WallLineDetection::process_()
                         wall_lines_msg.line_selected = i;
                 }
         }
+        wall_lines_msg.laser_scan = this->laserscan_input_current_;
 
         wall_lines_pub_->publish(wall_lines_msg);
         
