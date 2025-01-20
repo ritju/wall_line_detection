@@ -271,6 +271,11 @@ nav_msgs::msg::Path WallLineTest::generate_path(wall_line_detection_msgs::msg::W
 
                         RCLCPP_DEBUG(get_logger(), "index_start: %zd, index_end: %zd", index_start, index_end);
                         
+                        
+                        float resolution = 0.05;
+                        bool path_inited = false;
+                        geometry_msgs::msg::PoseStamped pose_last;
+                        RCLCPP_DEBUG(get_logger(), "--------------------------------");
                         for (size_t index = index_start; index <= index_end; index++)
                         {
                                 geometry_msgs::msg::PoseStamped poseStamped;
@@ -287,8 +292,32 @@ nav_msgs::msg::Path WallLineTest::generate_path(wall_line_detection_msgs::msg::W
                                 {
                                      // do nothing   
                                 }
-                                path.poses.push_back(poseStamped);
+
+                                if (!path_inited)
+                                {
+                                        path.poses.push_back(poseStamped);
+                                        pose_last = poseStamped;
+                                        path_inited = true;
+                                }
+                                else
+                                {
+                                        float distance = std::hypot(poseStamped.pose.position.x - pose_last.pose.position.x,
+                                                 poseStamped.pose.position.y - pose_last.pose.position.y);
+                                        // RCLCPP_DEBUG(get_logger(), "pose_current => x: %f, y: %f", poseStamped.pose.position.x, poseStamped.pose.position.y);
+                                        // RCLCPP_DEBUG(get_logger(), "pose_last    => x: %f, y: %f", pose_last.pose.position.x, pose_last.pose.position.y);
+                                        // RCLCPP_DEBUG(get_logger(), "distance: %f, resolution: %f", distance, resolution);
+                                        if (distance >= resolution)
+                                        {
+                                                path.poses.push_back(poseStamped);
+                                                pose_last = poseStamped; 
+                                        }
+                                        else
+                                        {
+                                                continue;
+                                        }
+                                }                                
                         }
+                        RCLCPP_DEBUG(get_logger(), "path's size: %zd", path.poses.size());
                         break;
                 }
                 case wall_line_LR::LEFT:
@@ -327,7 +356,11 @@ nav_msgs::msg::Path WallLineTest::generate_path(wall_line_detection_msgs::msg::W
 
                         RCLCPP_DEBUG(get_logger(), "index_start: %zd, index_end: %zd", index_start, index_end);
                         
-                        for (size_t index = index_start; index >= index_end; index -= 10)
+                        float resolution = 0.05;
+                        bool path_inited = false;
+                        geometry_msgs::msg::PoseStamped pose_last;
+                        RCLCPP_DEBUG(get_logger(), "--------------------------------");
+                        for (size_t index = index_start; index >= index_end; index -= 1)
                         {
                                 geometry_msgs::msg::PoseStamped poseStamped;
                                 poseStamped.header.frame_id = "map";
@@ -343,8 +376,31 @@ nav_msgs::msg::Path WallLineTest::generate_path(wall_line_detection_msgs::msg::W
                                 {
                                      // do nothing   
                                 }
-                                path.poses.push_back(poseStamped);
+                                if (!path_inited)
+                                {
+                                        path.poses.push_back(poseStamped);
+                                        pose_last = poseStamped;
+                                        path_inited = true;
+                                }
+                                else
+                                {
+                                        float distance = std::hypot(poseStamped.pose.position.x - pose_last.pose.position.x,
+                                                 poseStamped.pose.position.y - pose_last.pose.position.y);
+                                        RCLCPP_DEBUG(get_logger(), "pose_current => x: %f, y: %f", poseStamped.pose.position.x, poseStamped.pose.position.y);
+                                        RCLCPP_DEBUG(get_logger(), "pose_last    => x: %f, y: %f", pose_last.pose.position.x, pose_last.pose.position.y);
+                                        RCLCPP_DEBUG(get_logger(), "distance: %f, resolution: %f", distance, resolution);
+                                        if (distance >= resolution)
+                                        {
+                                                path.poses.push_back(poseStamped);
+                                                pose_last = poseStamped; 
+                                        }
+                                        else
+                                        {
+                                                continue;
+                                        }
+                                }
                         }
+                        RCLCPP_DEBUG(get_logger(), "path's size: %zd", path.poses.size());
                         break;
                 }
         }

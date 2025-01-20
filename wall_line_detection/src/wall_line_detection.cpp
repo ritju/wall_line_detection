@@ -549,7 +549,7 @@ WorldPose WallLineDetection::map_to_world(int x, int y)
 void WallLineDetection::lines_filter(std::vector<LineInfo> &lines_infos)
 {
         size_t size = lines_infos.size();
-        RCLCPP_DEBUG(get_logger(), "\nbefore filter, size: %zu", size);
+        RCLCPP_DEBUG(get_logger(), "before filter, size: %zu", size);
         int index = 0;
         for (auto iter = lines_infos.begin(); iter != lines_infos.end(); iter++)
         {
@@ -704,9 +704,9 @@ bool  WallLineDetection::merge_lines(cv::Point2i& pt1, cv::Point2i& pt2, cv::Poi
                 
                 if (pt1.x < pt3.x)
                 {
-                        RCLCPP_DEBUG(logger, "pt1.x < pt3.x, horizontal_thr: %d,theta: %f, cos(theta): %f, delta: %f",
-                                 this->horizontal_thr, theta, cos(theta), this->horizontal_thr / cos(theta));
-                        if (pt3.x < pt2.x + this->horizontal_thr / cos(theta))  // Meet the merger conditions
+                        RCLCPP_DEBUG(logger, "pt1.x < pt3.x, horizontal_thr: %d,theta: %f, std::abs(cos(theta)): %f, delta: %f",
+                                 this->horizontal_thr, theta, std::abs(cos(theta)), this->horizontal_thr / std::abs(cos(theta)));
+                        if (pt3.x < pt2.x + this->horizontal_thr / std::abs(cos(theta)))  // Meet the merger conditions
                         {
                                 // start point, assignment
                                 pt1 = pt1; // just for understand clearly
@@ -722,9 +722,9 @@ bool  WallLineDetection::merge_lines(cv::Point2i& pt1, cv::Point2i& pt2, cv::Poi
                 }
                 else
                 {
-                        RCLCPP_DEBUG(logger, "pt1.x > pt3.x, horizontal_thr: %d,theta: %f, cos(theta): %f, delta: %f",
-                                 this->horizontal_thr, theta, cos(theta), this->horizontal_thr / cos(theta));
-                        if (pt1.x < pt4.x + this->horizontal_thr / cos(theta)) // Meet the merger conditions
+                        RCLCPP_DEBUG(logger, "pt1.x > pt3.x, horizontal_thr: %d,theta: %f, std::abs(cos(theta)): %f, delta: %f",
+                                 this->horizontal_thr, theta, std::abs(cos(theta)), this->horizontal_thr / std::abs(cos(theta)));
+                        if (pt1.x < pt4.x + this->horizontal_thr / std::abs(cos(theta))) // Meet the merger conditions
                         {
                                 // start point, assignment
                                 pt1 = pt3; 
@@ -774,9 +774,9 @@ bool  WallLineDetection::merge_lines(cv::Point2i& pt1, cv::Point2i& pt2, cv::Poi
 
                 if (pt1.y < pt3.y)
                 {
-                        RCLCPP_DEBUG(logger, "pt1.y < pt3.y, horizontal_thr: %d,theta: %f, sin(std::abs(theta)): %f, delta: %f",
-                                 this->horizontal_thr, theta, sin(std::abs(theta)), this->horizontal_thr / sin(std::abs(theta)));
-                        if (pt3.y < pt2.y + this->horizontal_thr / sin(std::abs(theta)))  // Meet the merger conditions
+                        RCLCPP_DEBUG(logger, "pt1.y < pt3.y, horizontal_thr: %d,theta: %f, std::abs(sin(theta)): %f, delta: %f",
+                                 this->horizontal_thr, theta, std::abs(sin(theta)), this->horizontal_thr / std::abs(sin(theta)));
+                        if (pt3.y < pt2.y + this->horizontal_thr / std::abs(sin(theta)))  // Meet the merger conditions
                         {
                                 // start point, assignment
                                 pt1 = pt1; // just for understand clearly
@@ -792,9 +792,9 @@ bool  WallLineDetection::merge_lines(cv::Point2i& pt1, cv::Point2i& pt2, cv::Poi
                 }
                 else
                 {
-                        RCLCPP_DEBUG(logger, "pt1.y > pt3.y, horizontal_thr: %d,theta: %f, sin(std::abs(theta)): %f, delta: %f",
-                                 this->horizontal_thr, theta, sin(std::abs(theta)), this->horizontal_thr / sin(std::abs(theta)));
-                        if (pt1.y < pt4.y + this->horizontal_thr / sin(std::abs(theta))) // Meet the merger conditions
+                        RCLCPP_DEBUG(logger, "pt1.y > pt3.y, horizontal_thr: %d,theta: %f, std::abs(sin(theta)): %f, delta: %f",
+                                 this->horizontal_thr, theta, std::abs(sin(theta)), this->horizontal_thr / std::abs(sin(theta)));
+                        if (pt1.y < pt4.y + this->horizontal_thr / std::abs(sin(theta))) // Meet the merger conditions
                         {
                                 // start point, assignment
                                 pt1 = pt3; 
