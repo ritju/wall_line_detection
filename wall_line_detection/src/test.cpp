@@ -165,7 +165,9 @@ void WallLineTest::process_(wall_line_detection_msgs::msg::WallLine wall_line, f
         rclcpp::Time now_time = now();
         if ((now_time - time_action_last_send_goal_).seconds() > (1.0 / action_frequency_))
         {
+                RCLCPP_INFO(get_logger(), "follow_path_client_ async_send_goal");
                 follow_path_client_->async_send_goal(goal);
+                time_action_last_send_goal_ = now_time;
         }
 }
 
