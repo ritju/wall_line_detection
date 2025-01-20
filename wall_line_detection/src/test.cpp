@@ -280,44 +280,51 @@ nav_msgs::msg::Path WallLineTest::generate_path(wall_line_detection_msgs::msg::W
                         RCLCPP_DEBUG(get_logger(), "--------------------------------");
                         for (size_t index = index_start; index <= index_end; index++)
                         {
-                                geometry_msgs::msg::PoseStamped poseStamped;
-                                poseStamped.header.frame_id = "map";
-                                poseStamped.pose.position.x = robot_x + laserscan_.ranges[index] * (cos(robot_theta) * cos_map[index] - sin(robot_theta) * sin_map[index]);
-                                poseStamped.pose.position.y = robot_y + laserscan_.ranges[index] * (sin(robot_theta) * cos_map[index] + cos(robot_theta) * sin_map[index]);
-                                poseStamped.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(angle_offset);
-                                if (use_offset_)
+                                if (std::isinf(laserscan_.ranges[index]) || laserscan_.ranges[index] <= laserscan_.range_min || laserscan_.ranges[index] >= laserscan_.range_max)
                                 {
-                                        poseStamped.pose.position.x = poseStamped.pose.position.x + offset * cos(angle_offset);
-                                        poseStamped.pose.position.y = poseStamped.pose.position.y + offset * sin(angle_offset);
+                                        continue;
                                 }
                                 else
                                 {
-                                     // do nothing   
-                                }
-
-                                if (!path_inited)
-                                {
-                                        path.poses.push_back(poseStamped);
-                                        pose_last = poseStamped;
-                                        path_inited = true;
-                                }
-                                else
-                                {
-                                        float distance = std::hypot(poseStamped.pose.position.x - pose_last.pose.position.x,
-                                                 poseStamped.pose.position.y - pose_last.pose.position.y);
-                                        // RCLCPP_DEBUG(get_logger(), "pose_current => x: %f, y: %f", poseStamped.pose.position.x, poseStamped.pose.position.y);
-                                        // RCLCPP_DEBUG(get_logger(), "pose_last    => x: %f, y: %f", pose_last.pose.position.x, pose_last.pose.position.y);
-                                        // RCLCPP_DEBUG(get_logger(), "distance: %f, resolution: %f", distance, resolution);
-                                        if (distance >= resolution)
+                                        geometry_msgs::msg::PoseStamped poseStamped;
+                                        poseStamped.header.frame_id = "map";
+                                        poseStamped.pose.position.x = robot_x + laserscan_.ranges[index] * (cos(robot_theta) * cos_map[index] - sin(robot_theta) * sin_map[index]);
+                                        poseStamped.pose.position.y = robot_y + laserscan_.ranges[index] * (sin(robot_theta) * cos_map[index] + cos(robot_theta) * sin_map[index]);
+                                        poseStamped.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(angle_offset);
+                                        if (use_offset_)
                                         {
-                                                path.poses.push_back(poseStamped);
-                                                pose_last = poseStamped; 
+                                                poseStamped.pose.position.x = poseStamped.pose.position.x + offset * cos(angle_offset);
+                                                poseStamped.pose.position.y = poseStamped.pose.position.y + offset * sin(angle_offset);
                                         }
                                         else
                                         {
-                                                continue;
+                                        // do nothing   
                                         }
-                                }                                
+
+                                        if (!path_inited)
+                                        {
+                                                path.poses.push_back(poseStamped);
+                                                pose_last = poseStamped;
+                                                path_inited = true;
+                                        }
+                                        else
+                                        {
+                                                float distance = std::hypot(poseStamped.pose.position.x - pose_last.pose.position.x,
+                                                        poseStamped.pose.position.y - pose_last.pose.position.y);
+                                                RCLCPP_DEBUG(get_logger(), "pose_current => x: %f, y: %f", poseStamped.pose.position.x, poseStamped.pose.position.y);
+                                                RCLCPP_DEBUG(get_logger(), "pose_last    => x: %f, y: %f", pose_last.pose.position.x, pose_last.pose.position.y);
+                                                RCLCPP_DEBUG(get_logger(), "distance: %f, resolution: %f", distance, resolution);
+                                                if (distance >= resolution)
+                                                {
+                                                        path.poses.push_back(poseStamped);
+                                                        pose_last = poseStamped; 
+                                                }
+                                                else
+                                                {
+                                                        continue;
+                                                }
+                                        }
+                                }                             
                         }
                         RCLCPP_DEBUG(get_logger(), "path's size: %zd", path.poses.size());
                         break;
@@ -364,41 +371,48 @@ nav_msgs::msg::Path WallLineTest::generate_path(wall_line_detection_msgs::msg::W
                         RCLCPP_DEBUG(get_logger(), "--------------------------------");
                         for (size_t index = index_start; index >= index_end; index -= 1)
                         {
-                                geometry_msgs::msg::PoseStamped poseStamped;
-                                poseStamped.header.frame_id = "map";
-                                poseStamped.pose.position.x = robot_x + laserscan_.ranges[index] * (cos(robot_theta) * cos_map[index] - sin(robot_theta) * sin_map[index]);
-                                poseStamped.pose.position.y = robot_y + laserscan_.ranges[index] * (sin(robot_theta) * cos_map[index] + cos(robot_theta) * sin_map[index]);
-                                poseStamped.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(angle_offset);
-                                if (use_offset_)
+                                if (std::isinf(laserscan_.ranges[index]) || laserscan_.ranges[index] <= laserscan_.range_min || laserscan_.ranges[index] >= laserscan_.range_max)
                                 {
-                                        poseStamped.pose.position.x = poseStamped.pose.position.x + offset * cos(angle_offset);
-                                        poseStamped.pose.position.y = poseStamped.pose.position.y + offset * sin(angle_offset);
+                                        continue;
                                 }
                                 else
                                 {
-                                     // do nothing   
-                                }
-                                if (!path_inited)
-                                {
-                                        path.poses.push_back(poseStamped);
-                                        pose_last = poseStamped;
-                                        path_inited = true;
-                                }
-                                else
-                                {
-                                        float distance = std::hypot(poseStamped.pose.position.x - pose_last.pose.position.x,
-                                                 poseStamped.pose.position.y - pose_last.pose.position.y);
-                                        RCLCPP_DEBUG(get_logger(), "pose_current => x: %f, y: %f", poseStamped.pose.position.x, poseStamped.pose.position.y);
-                                        RCLCPP_DEBUG(get_logger(), "pose_last    => x: %f, y: %f", pose_last.pose.position.x, pose_last.pose.position.y);
-                                        RCLCPP_DEBUG(get_logger(), "distance: %f, resolution: %f", distance, resolution);
-                                        if (distance >= resolution)
+                                        geometry_msgs::msg::PoseStamped poseStamped;
+                                        poseStamped.header.frame_id = "map";
+                                        poseStamped.pose.position.x = robot_x + laserscan_.ranges[index] * (cos(robot_theta) * cos_map[index] - sin(robot_theta) * sin_map[index]);
+                                        poseStamped.pose.position.y = robot_y + laserscan_.ranges[index] * (sin(robot_theta) * cos_map[index] + cos(robot_theta) * sin_map[index]);
+                                        poseStamped.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(angle_offset);
+                                        if (use_offset_)
                                         {
-                                                path.poses.push_back(poseStamped);
-                                                pose_last = poseStamped; 
+                                                poseStamped.pose.position.x = poseStamped.pose.position.x + offset * cos(angle_offset);
+                                                poseStamped.pose.position.y = poseStamped.pose.position.y + offset * sin(angle_offset);
                                         }
                                         else
                                         {
-                                                continue;
+                                        // do nothing   
+                                        }
+                                        if (!path_inited)
+                                        {
+                                                path.poses.push_back(poseStamped);
+                                                pose_last = poseStamped;
+                                                path_inited = true;
+                                        }
+                                        else
+                                        {
+                                                float distance = std::hypot(poseStamped.pose.position.x - pose_last.pose.position.x,
+                                                        poseStamped.pose.position.y - pose_last.pose.position.y);
+                                                RCLCPP_DEBUG(get_logger(), "pose_current => x: %f, y: %f", poseStamped.pose.position.x, poseStamped.pose.position.y);
+                                                RCLCPP_DEBUG(get_logger(), "pose_last    => x: %f, y: %f", pose_last.pose.position.x, pose_last.pose.position.y);
+                                                RCLCPP_DEBUG(get_logger(), "distance: %f, resolution: %f", distance, resolution);
+                                                if (distance >= resolution)
+                                                {
+                                                        path.poses.push_back(poseStamped);
+                                                        pose_last = poseStamped; 
+                                                }
+                                                else
+                                                {
+                                                        continue;
+                                                }
                                         }
                                 }
                         }
