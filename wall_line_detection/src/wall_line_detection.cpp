@@ -168,7 +168,7 @@ void WallLineDetection::get_map_robot_tf()
         }
 }
 
-void WallLineDetection::process_()
+void WallLineDetection::process_(rclcpp::Time laser_scan_time)
 {
         auto img_map_empty_clone = this->img_map_empty_.clone();
         // RCLCPP_DEBUG(this->get_logger(), "size: %zu", this->laserscan_points_vector.size());
@@ -226,7 +226,7 @@ void WallLineDetection::process_()
         this->lines_filter(this->lines_);
         wall_line_detection_msgs::msg::WallLinesStamped wall_lines_msg;
         wall_lines_msg.header.frame_id = "map";
-        wall_lines_msg.header.stamp = now();
+        wall_lines_msg.header.stamp = laser_scan_time;
         if (lines_.size() > 0)
         {
                 for (size_t index = 0; index < lines_.size(); index++)
@@ -421,7 +421,8 @@ void WallLineDetection::laserscan_sub_callback_(const LaserScanMsg::SharedPtr ms
                                 // RCLCPP_DEBUG(this->get_logger(), "x: %d, y: %d", map_pose.x, map_pose.y);
                         }
                 }
-                process_(); 
+                rclcpp::Time laser_scan_time = msg->header.stamp;
+                process_(laser_scan_time); 
         }
 }
 

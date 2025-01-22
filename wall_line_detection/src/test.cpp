@@ -15,14 +15,20 @@ rclcpp::Node("wall_line_test", options)
         this->tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         this->tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*this->tf_buffer_);
 
+        // pubs
+        teb_obstacles_pub_ = this->create_publisher<costmap_converter_msgs::msg::ObstacleArrayMsg>("obstacles", rclcpp::SystemDefaultsQoS());
+        wall_line_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("wall_line_path", rclcpp::QoS(10).best_effort());
+
         // subs
         auto cb_group_type = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
         auto sub_options = rclcpp::SubscriptionOptions();
         sub_options.callback_group = cb_group_type;
         wall_line_sub_ = this->create_subscription<wall_line_detection_msgs::msg::WallLinesStamped>(this->msg_topic_name_, 
                 rclcpp::SensorDataQoS(), std::bind(&WallLineTest::wall_line_sub_callback, this, std::placeholders::_1), sub_options );
+
+        // camera2_color_sub_ = this->create_subscription<sensor_msgs::msg::Image>("/camera2/color/image_raw", rclcpp::SensorDataQoS(), 
+        //         std::bind(&WallLineTest::camera2_color_sub_callback, this, std::placeholders::_1), sub_options );
         
-        wall_line_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("wall_line_path", rclcpp::QoS(10).best_effort());
 
         // follow_path action client
         follow_path_client_ = rclcpp_action::create_client<nav2_msgs::action::FollowPath>(this, "follow_path");
@@ -51,7 +57,44 @@ void WallLineTest::init_params()
         this->action_frequency_ = this->get_parameter_or<float>("action_frequency", 2.0);
 }
 
-void WallLineTest::get_map_robot_tf()
+void WallLineTest::camera2_color_sub_callback(const sensor_msgs::msg::Image::ConstSharedPtr msg)
+{
+        rclcpp::Time color_time = msg->header.stamp;
+
+        std::string refFrame = "map";
+        std::string childFrame = "camera2_depth_optical_frame";
+        std::string errMsg;
+
+        tf2::Transform tf2_color2;
+        double timeout = 0.5;
+
+        if (!this->tf_buffer_->canTransform(refFrame, childFrame, tf2::TimePointZero,
+		    tf2::durationFromSec(timeout), &errMsg))
+        {
+            RCLCPP_ERROR_STREAM(this->get_logger(), "Unable to get TF from " 
+                << refFrame << " to " << childFrame << ": " << errMsg);
+        } 
+        else 
+        {
+            try 
+            {
+                auto tf2_color2_msg = this->tf_buffer_->lookupTransform( refFrame, childFrame, color_time, rclcpp::Duration::from_seconds(timeout));
+                
+                tf2::fromMsg(tf2_color2_msg.transform, tf2_color2);               
+            } 
+            catch (const tf2::TransformException & e) 
+            {
+                RCLCPP_ERROR_STREAM(
+                    this->get_logger(),
+                    "Error in lookupTransform of " << childFrame << " in " << refFrame << " : " << e.what());
+            }
+        }
+
+        RCLCPP_INFO(get_logger(), "position => x: %f, y: %f", tf2_color2.getOrigin().getX(), tf2_color2.getOrigin().getY());
+        RCLCPP_INFO(get_logger(), "yaw: %f", tf2::getYaw(tf2_color2.getRotation()));
+}
+
+void WallLineTest::get_map_robot_tf(rclcpp::Time laser_scan_time)
 {
         std::string errMsg;
         std::string refFrame = std::string("map");
@@ -68,7 +111,7 @@ void WallLineTest::get_map_robot_tf()
         {
             try 
             {
-                transformStamped = this->tf_buffer_->lookupTransform( refFrame, childFrame, tf2::TimePointZero, tf2::durationFromSec(0.5));
+                transformStamped = this->tf_buffer_->lookupTransform( refFrame, childFrame, laser_scan_time, rclcpp::Duration::from_seconds(0.1));
                 tf2::fromMsg(transformStamped.transform, this->map_robot_tf);               
             } 
             catch (const tf2::TransformException & e) 
@@ -130,7 +173,8 @@ void WallLineTest::wall_line_sub_callback(const wall_line_detection_msgs::msg::W
                                 this->msg_ = *msg;
                                 this->get_msg_ = true;
                                 RCLCPP_DEBUG(get_logger(), "start process (only once)......");
-                                process_(msg_.wall_lines[msg_.line_selected], this->path_offset_);
+                                rclcpp::Time laser_scan_time = msg->header.stamp;
+                                process_(msg_.wall_lines[msg_.line_selected], laser_scan_time, this->path_offset_);
                         }
                 }
                 else
@@ -145,15 +189,16 @@ void WallLineTest::wall_line_sub_callback(const wall_line_detection_msgs::msg::W
                 {
                         this->msg_ = *msg;
                         RCLCPP_DEBUG(get_logger(), "start process ......");
-                        process_(msg_.wall_lines[msg_.line_selected], this->path_offset_);
+                        rclcpp::Time laser_scan_time = msg->header.stamp;
+                        process_(msg_.wall_lines[msg_.line_selected], laser_scan_time, this->path_offset_);
                 }
         }
 
 }
 
-void WallLineTest::process_(wall_line_detection_msgs::msg::WallLine wall_line, float offset)
+void WallLineTest::process_(wall_line_detection_msgs::msg::WallLine wall_line, rclcpp::Time laser_scan_time, float offset)
 {
-        get_map_robot_tf();
+        get_map_robot_tf(laser_scan_time);
         auto path = generate_path(wall_line, map_robot_tf, offset);
         auto goal = nav2_msgs::action::FollowPath::Goal();
         goal.path = path;
@@ -173,9 +218,6 @@ void WallLineTest::process_(wall_line_detection_msgs::msg::WallLine wall_line, f
 
 nav_msgs::msg::Path WallLineTest::generate_path(wall_line_detection_msgs::msg::WallLine wall_line, tf2::Transform tf_robot, float offset)
 {
-
-        get_map_robot_tf();
-
         double robot_x, robot_y, robot_theta;
         robot_x = tf_robot.getOrigin().getX();
         robot_y = tf_robot.getOrigin().getY();
@@ -326,7 +368,35 @@ nav_msgs::msg::Path WallLineTest::generate_path(wall_line_detection_msgs::msg::W
                                         }
                                 }                             
                         }
+
                         RCLCPP_DEBUG(get_logger(), "path's size: %zd", path.poses.size());
+
+                        // pub "obstacle" topic
+                        geometry_msgs::msg::Point32 point_start, point_end;
+                        double range_start, range_end, angle_start, angle_end;
+
+                        range_start = this->laserscan_.ranges[index_start];
+                        angle_start = this->laserscan_.angle_min + static_cast<double>(index_start) * this->laserscan_.angle_increment;
+                        point_start.x = range_start * cos(angle_start);
+                        point_start.y = range_start * sin(angle_start);
+
+                        range_end = this->laserscan_.ranges[index_end];
+                        angle_end = this->laserscan_.angle_min + static_cast<double>(index_end) * this->laserscan_.angle_increment;
+                        point_end.x = range_end * cos(angle_end);
+                        point_end.y = range_end * sin(angle_end);
+
+                        costmap_converter_msgs::msg::ObstacleArrayMsg obstacle_array_msg;
+                        obstacle_array_msg.header = this->laserscan_.header;
+
+                        costmap_converter_msgs::msg::ObstacleMsg obstacle_msg;
+                        obstacle_msg.header = this->laserscan_.header;
+                        obstacle_msg.polygon.points.push_back(point_start);
+                        obstacle_msg.polygon.points.push_back(point_end);
+
+                        obstacle_array_msg.obstacles.push_back(obstacle_msg);
+
+                        teb_obstacles_pub_->publish(obstacle_array_msg);
+
                         break;
                 }
                 case wall_line_LR::LEFT:
@@ -417,6 +487,34 @@ nav_msgs::msg::Path WallLineTest::generate_path(wall_line_detection_msgs::msg::W
                                 }
                         }
                         RCLCPP_DEBUG(get_logger(), "path's size: %zd", path.poses.size());
+
+
+                        // pub "obstacle" topic
+                        geometry_msgs::msg::Point32 point_start, point_end;
+                        double range_start, range_end, angle_start, angle_end;
+
+                        range_start = this->laserscan_.ranges[index_start];
+                        angle_start = this->laserscan_.angle_min + static_cast<double>(index_start) * this->laserscan_.angle_increment;
+                        point_start.x = range_start * cos(angle_start);
+                        point_start.y = range_start * sin(angle_start);
+
+                        range_end = this->laserscan_.ranges[index_end];
+                        angle_end = this->laserscan_.angle_min + static_cast<double>(index_end) * this->laserscan_.angle_increment;
+                        point_end.x = range_end * cos(angle_end);
+                        point_end.y = range_end * sin(angle_end);
+
+                        costmap_converter_msgs::msg::ObstacleArrayMsg obstacle_array_msg;
+                        obstacle_array_msg.header = this->laserscan_.header;
+
+                        costmap_converter_msgs::msg::ObstacleMsg obstacle_msg;
+                        obstacle_msg.header = this->laserscan_.header;
+                        // swap start and end order
+                        obstacle_msg.polygon.points.push_back(point_end);
+                        obstacle_msg.polygon.points.push_back(point_start);
+
+                        obstacle_array_msg.obstacles.push_back(obstacle_msg);
+
+                        teb_obstacles_pub_->publish(obstacle_array_msg);
                         break;
                 }
         }

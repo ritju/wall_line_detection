@@ -95,7 +95,7 @@ rclcpp::Publisher<wall_line_detection_msgs::msg::WallLinesStamped>::SharedPtr wa
 void laserscan_sub_callback_(const LaserScanMsg::SharedPtr msg);
 void map_sub_callback_(const OccupancyGridMsg::SharedPtr msg);
 
-void process_();
+void process_(rclcpp::Time laser_scan_time);
 
 // params
 std::vector<std::string> laserscan_topic_sub_name;
