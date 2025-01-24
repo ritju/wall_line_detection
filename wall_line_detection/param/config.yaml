@@ -30,9 +30,9 @@ wall_line_test:
     msg_topic_name: "wall_lines_stamped"
     msg_time_tolerance: 0.2
     use_offset: true
-    path_offset: 0.4
+    path_offset: 0.5
     only_get_msg_once: false
-    action_frequency: 1.0
+    action_frequency: 0.1
 
 
 
