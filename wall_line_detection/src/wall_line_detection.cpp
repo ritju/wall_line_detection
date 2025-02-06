@@ -24,11 +24,13 @@ WallLineDetection::WallLineDetection(const rclcpp::NodeOptions & options):
         
         if (this->laserscan_topic_sub_name.size() == 1) // 兼容只有一个激光数据的机器人
         {
+                RCLCPP_INFO(get_logger(), "One laserscan: %s", laserscan_topic_sub_name[0].c_str());
                 this->laserscan_sub_ = this->create_subscription<LaserScanMsg>
-                        (this->laserscan_topic_sub_name[0], 30, std::bind(&WallLineDetection::laserscan_sub_callback_, this, _1), sub_options1);
+                        (this->laserscan_topic_sub_name[0], rclcpp::SensorDataQoS(), std::bind(&WallLineDetection::laserscan_sub_callback_, this, _1), sub_options1);
         }
         else if (this->laserscan_topic_sub_name.size() == 3) // 兼容有三个激光数据的机器人
         {
+                RCLCPP_INFO(get_logger(), "Three laserscans: %s, %s, %s", laserscan_topic_sub_name[0].c_str(), laserscan_topic_sub_name[1].c_str(), laserscan_topic_sub_name[2].c_str());
                 auto cb_group_type = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
                 auto sub_ops = rclcpp::SubscriptionOptions();
                 sub_ops.callback_group = cb_group_type;
@@ -40,6 +42,10 @@ WallLineDetection::WallLineDetection(const rclcpp::NodeOptions & options):
                 sync_ = std::make_shared<Synchronizer>(SyncPolicy(10), laser_front_sub_, laser_left_sub_, laser_right_sub_);
                 sync_->registerCallback(std::bind(&WallLineDetection::all_lasers_callback, this, std::placeholders::_1,
                         std::placeholders::_2, std::placeholders::_3));
+        }
+        else
+        {
+                RCLCPP_INFO(get_logger(), "the number of laserscan is %d, error.", (int)laserscan_topic_sub_name.size());
         }
                 
         auto sub_group2 = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);

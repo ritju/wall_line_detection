@@ -20,9 +20,9 @@ wall_line_detection:
     imshow_map: false
     imshow_laser: false
     imshow_edge: false
-    imshow_line: false
+    imshow_line: true
     window_type: 0 # nomal=0, autosize=1
-    line_distance_max: 2.0
+    line_distance_max: 2.2
 
 
 wall_line_test:
