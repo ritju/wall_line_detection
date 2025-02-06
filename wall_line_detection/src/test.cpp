@@ -1,10 +1,13 @@
 #include "wall_line_detection/test.hpp"
+#include <boost/algorithm/string.hpp>
+
 
 namespace wall_line_detection_pkg
 {
 
 WallLineTest::WallLineTest(const rclcpp::NodeOptions & options):
-rclcpp::Node("wall_line_test", options)
+        rclcpp::Node("wall_line_test", options),
+        costmap_converter_loader_("costmap_converter", "costmap_converter::BaseCostmapToPolygons")
 {
         RCLCPP_INFO(this->get_logger(), "wall line test node construction");
         this->init_params();
@@ -32,6 +35,7 @@ rclcpp::Node("wall_line_test", options)
 
         // follow_path action client
         follow_path_client_ = rclcpp_action::create_client<nav2_msgs::action::FollowPath>(this, "follow_path");
+        costmap_converter_ = costmap_converter_loader_.createSharedInstance("costmap_converter::BaseCostmapToPolygons");
 
 }
 

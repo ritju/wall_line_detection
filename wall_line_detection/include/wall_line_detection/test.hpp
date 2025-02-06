@@ -10,12 +10,16 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "tf2/utils.h"
 #include "angles/angles.h"
+#include "pluginlib/class_loader.hpp"
 
 #include "nav2_msgs/action/follow_path.hpp"
 #include "wall_line_detection_msgs/msg/wall_lines_stamped.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "sensor_msgs/msg/image.hpp"
+
+// costmap_converter
 #include "costmap_converter_msgs/msg/obstacle_array_msg.hpp"
+#include "costmap_converter/costmap_converter_interface.h"
 
 #include "nav2_util/geometry_utils.hpp"
 
@@ -102,6 +106,9 @@ std::vector<float> sin_map;
 std::vector<float> cos_map;
 std::vector<point> scan_point_vec;
 bool sin_cos_map_generated{false};
+
+pluginlib::ClassLoader<costmap_converter::BaseCostmapToPolygons> costmap_converter_loader_;
+std::shared_ptr<costmap_converter::BaseCostmapToPolygons> costmap_converter_;
 
 }; // end of class
 
