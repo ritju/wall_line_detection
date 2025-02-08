@@ -129,7 +129,7 @@ bool WallLineTest::is_current(wall_line_detection_msgs::msg::WallLinesStamped ms
 
         rclcpp::Duration delta_time = now() - rclcpp::Time(msg.header.stamp);
         double delta_time_seconds = delta_time.seconds();
-        RCLCPP_DEBUG(get_logger(), "delta_time_seconds: %f", delta_time_seconds);
+        RCLCPP_DEBUG(get_logger(), "delta_time_seconds: %f, msg_time_tolerance: %f", delta_time_seconds, msg_time_tolerance_);
         
         if (delta_time_seconds < this->msg_time_tolerance_)
         {
@@ -185,12 +185,18 @@ void WallLineTest::wall_line_sub_callback(const wall_line_detection_msgs::msg::W
         }
         else
         {
-                if (is_current(*msg) && msg->line_selected != -1)
+                auto current_ = is_current(*msg);
+                if (current_ && msg->line_selected != -1)
                 {
                         this->msg_ = *msg;
                         RCLCPP_DEBUG(get_logger(), "start process ......");
                         rclcpp::Time laser_scan_time = msg->header.stamp;
                         process_(msg_.wall_lines[msg_.line_selected], laser_scan_time, this->path_offset_);
+                }
+                else
+                {
+                        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "current: %s, line_selected: %d", 
+                                 current_?"true":"false", msg->line_selected);
                 }
         }
 

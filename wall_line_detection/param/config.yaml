@@ -20,7 +20,7 @@ wall_line_detection:
     imshow_map: false
     imshow_laser: false
     imshow_edge: false
-    imshow_line: true
+    imshow_line: false
     window_type: 0 # nomal=0, autosize=1
     line_distance_max: 2.2
 
@@ -28,9 +28,9 @@ wall_line_detection:
 wall_line_test:
   ros__parameters:
     msg_topic_name: "wall_lines_stamped"
-    msg_time_tolerance: 0.2
+    msg_time_tolerance: 0.35
     use_offset: true
-    path_offset: 0.5
+    path_offset: 0.3
     only_get_msg_once: false
     action_frequency: 0.1
 
