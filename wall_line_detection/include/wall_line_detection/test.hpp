@@ -16,6 +16,7 @@
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "sensor_msgs/msg/image.hpp"
 #include "costmap_converter_msgs/msg/obstacle_array_msg.hpp"
+#include "std_msgs/msg/bool.hpp"
 
 #include "nav2_util/geometry_utils.hpp"
 
@@ -57,6 +58,13 @@ bool use_offset_;
 float path_offset_;
 bool only_get_msg_once_;
 float action_frequency_;
+float path_add_;
+float tmp_goal_x_;
+float tmp_goal_y_;
+float tmp_goal_x2_;
+float tmp_goal_y2_;
+float path_pose_distance_max_;
+float path_rotate_offset_;
 
 rclcpp::Time time_action_last_send_goal_;
 
@@ -73,6 +81,7 @@ nav_msgs::msg::Path generate_path(wall_line_detection_msgs::msg::WallLine wall_l
 // subs
 rclcpp::Subscription<wall_line_detection_msgs::msg::WallLinesStamped>::SharedPtr wall_line_sub_;
 rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr camera2_color_sub_;
+rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr start_sub_;
 
 // pubs
 rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr wall_line_path_pub_;
@@ -82,8 +91,12 @@ void wall_line_sub_callback(const wall_line_detection_msgs::msg::WallLinesStampe
 
 void camera2_color_sub_callback(const sensor_msgs::msg::Image::ConstSharedPtr msg);
 
+void start_sub_callback(std_msgs::msg::Bool::ConstSharedPtr msg);
+
 // action client
 rclcpp_action::Client<nav2_msgs::action::FollowPath>::SharedPtr follow_path_client_;
+
+std::shared_future<std::shared_ptr<rclcpp_action::ClientGoalHandle<nav2_msgs::action::FollowPath>>> goal_future;
 
 wall_line_detection_msgs::msg::WallLinesStamped msg_;
 
@@ -102,6 +115,8 @@ std::vector<float> sin_map;
 std::vector<float> cos_map;
 std::vector<point> scan_point_vec;
 bool sin_cos_map_generated{false};
+bool start_{false};
+bool action_started{false};
 
 }; // end of class
 

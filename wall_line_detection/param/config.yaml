@@ -20,9 +20,9 @@ wall_line_detection:
     imshow_map: false
     imshow_laser: false
     imshow_edge: false
-    imshow_line: false
+    imshow_line: true
     window_type: 0 # nomal=0, autosize=1
-    line_distance_max: 2.2
+    line_distance_max: 1.8
 
 
 wall_line_test:
@@ -30,9 +30,16 @@ wall_line_test:
     msg_topic_name: "wall_lines_stamped"
     msg_time_tolerance: 0.35
     use_offset: true
-    path_offset: 0.3
+    path_offset: 0.5
     only_get_msg_once: false
-    action_frequency: 0.1
+    action_frequency: 1.0
+    path_add: 2.0
+    tmp_goal_x: -0.2 #-7.4
+    tmp_goal_y: -4.0 #-2.0
+    tmp_goal_x2: 0.4 #-6.5
+    tmp_goal_y2: -1.0 #2.2
+    path_pose_distance_max: 0.1
+    path_rotate_offset: 3.0
 
 
 

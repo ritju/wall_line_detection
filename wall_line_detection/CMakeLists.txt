@@ -26,6 +26,7 @@ find_package(wall_line_detection_msgs REQUIRED)
 find_package(angles REQUIRED)
 find_package(nav2_util REQUIRED)
 find_package(costmap_converter_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 nav2_package()
 
@@ -54,6 +55,7 @@ set(dependencies
   angles
   nav2_util
   costmap_converter_msgs
+  std_msgs
 )
 target_include_directories(wall_line_detection_lib PUBLIC include)
 target_include_directories(wall_line_test_lib PUBLIC include)
