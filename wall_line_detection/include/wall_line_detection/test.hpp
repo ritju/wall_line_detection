@@ -15,7 +15,7 @@
 #include "wall_line_detection_msgs/msg/wall_lines_stamped.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "sensor_msgs/msg/image.hpp"
-#include "costmap_converter_msgs/msg/obstacle_array_msg.hpp"
+// #include "costmap_converter_msgs/msg/obstacle_array_msg.hpp"
 #include "std_msgs/msg/bool.hpp"
 
 #include "nav2_util/geometry_utils.hpp"
@@ -85,7 +85,7 @@ rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr start_sub_;
 
 // pubs
 rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr wall_line_path_pub_;
-rclcpp::Publisher<costmap_converter_msgs::msg::ObstacleArrayMsg>::SharedPtr teb_obstacles_pub_;
+// rclcpp::Publisher<costmap_converter_msgs::msg::ObstacleArrayMsg>::SharedPtr teb_obstacles_pub_;
 
 void wall_line_sub_callback(const wall_line_detection_msgs::msg::WallLinesStamped::ConstSharedPtr msg);
 

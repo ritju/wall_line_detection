@@ -16,7 +16,7 @@ rclcpp::Node("wall_line_test", options)
         this->tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*this->tf_buffer_);
 
         // pubs
-        teb_obstacles_pub_ = this->create_publisher<costmap_converter_msgs::msg::ObstacleArrayMsg>("obstacles", rclcpp::SystemDefaultsQoS());
+        // teb_obstacles_pub_ = this->create_publisher<costmap_converter_msgs::msg::ObstacleArrayMsg>("obstacles", rclcpp::SystemDefaultsQoS());
         wall_line_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("wall_line_path", rclcpp::QoS(10).best_effort());
 
         // subs
@@ -474,17 +474,17 @@ nav_msgs::msg::Path WallLineTest::generate_path(wall_line_detection_msgs::msg::W
                         point_end.x = range_end * cos(angle_end);
                         point_end.y = range_end * sin(angle_end);
 
-                        costmap_converter_msgs::msg::ObstacleArrayMsg obstacle_array_msg;
-                        obstacle_array_msg.header = this->laserscan_.header;
+                        // costmap_converter_msgs::msg::ObstacleArrayMsg obstacle_array_msg;
+                        // obstacle_array_msg.header = this->laserscan_.header;
 
-                        costmap_converter_msgs::msg::ObstacleMsg obstacle_msg;
-                        obstacle_msg.header = this->laserscan_.header;
-                        obstacle_msg.polygon.points.push_back(point_start);
-                        obstacle_msg.polygon.points.push_back(point_end);
+                        // costmap_converter_msgs::msg::ObstacleMsg obstacle_msg;
+                        // obstacle_msg.header = this->laserscan_.header;
+                        // obstacle_msg.polygon.points.push_back(point_start);
+                        // obstacle_msg.polygon.points.push_back(point_end);
 
-                        obstacle_array_msg.obstacles.push_back(obstacle_msg);
+                        // obstacle_array_msg.obstacles.push_back(obstacle_msg);
 
-                        teb_obstacles_pub_->publish(obstacle_array_msg);
+                        // teb_obstacles_pub_->publish(obstacle_array_msg);
 
                         break;
                 }
@@ -596,18 +596,18 @@ nav_msgs::msg::Path WallLineTest::generate_path(wall_line_detection_msgs::msg::W
                         point_end.x = range_end * cos(angle_end);
                         point_end.y = range_end * sin(angle_end);
 
-                        costmap_converter_msgs::msg::ObstacleArrayMsg obstacle_array_msg;
-                        obstacle_array_msg.header = this->laserscan_.header;
+                        // costmap_converter_msgs::msg::ObstacleArrayMsg obstacle_array_msg;
+                        // obstacle_array_msg.header = this->laserscan_.header;
 
-                        costmap_converter_msgs::msg::ObstacleMsg obstacle_msg;
-                        obstacle_msg.header = this->laserscan_.header;
-                        // swap start and end order
-                        obstacle_msg.polygon.points.push_back(point_end);
-                        obstacle_msg.polygon.points.push_back(point_start);
+                        // costmap_converter_msgs::msg::ObstacleMsg obstacle_msg;
+                        // obstacle_msg.header = this->laserscan_.header;
+                        // // swap start and end order
+                        // obstacle_msg.polygon.points.push_back(point_end);
+                        // obstacle_msg.polygon.points.push_back(point_start);
 
-                        obstacle_array_msg.obstacles.push_back(obstacle_msg);
+                        // obstacle_array_msg.obstacles.push_back(obstacle_msg);
 
-                        teb_obstacles_pub_->publish(obstacle_array_msg);
+                        // teb_obstacles_pub_->publish(obstacle_array_msg);
                         break;
                 }
         }
