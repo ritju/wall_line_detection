@@ -166,28 +166,28 @@ MapPose word_to_picture_bounded(double w_x, double w_y);
 WorldPose map_to_world(int x, int y);
 
 
-double area(int x1, int y1, int x2, int y2, int x3, int y3)
+double area(double x1, double y1, double x2, double y2, double x3, double y3)
 {
         return fabs(x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
 }
 
-double distance(int x1, int y1, int x2, int y2)
+double distance(double x1, double y1, double x2, double y2)
 {     
         return std::sqrt(std::pow(x1-x2, 2) + std::pow(y1-y2, 2));
 }
 
-double calculate_height(int x1, int y1, int x2, int y2, int x3, int y3)
+double calculate_height(double x1, double y1, double x2, double y2, double x3, double y3)
 {
         return area(x1, y1, x2, y2, x3, y3) / distance(x2, y2, x3, y3);
 }
 
 double calculate_vertical_distance_dummy(cv::Vec4i line1, cv::Vec4i line2)
 {
-        int x1, y1, x2, y2;
-        x1 = (line1[0] + line1[2]) / 2;
-        y1 = (line1[1] + line1[3]) / 2;
-        x2 = (line2[0] + line2[2]) / 2;
-        y2 = (line2[1] + line2[3]) / 2;
+        double x1, y1, x2, y2;
+        x1 = (line1[0] + line1[2]) / 2.0;
+        y1 = (line1[1] + line1[3]) / 2.0;
+        x2 = (line2[0] + line2[2]) / 2.0;
+        y2 = (line2[1] + line2[3]) / 2.0;
         return distance(x1, y1, x2, y2);
 }
 
